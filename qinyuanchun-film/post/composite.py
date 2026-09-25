@@ -144,6 +144,12 @@ def process(exr_path, cam, P):
     H, W = a.shape
     aa = np.maximum(a, 1e-4)[..., None]
     fg = rgb / aa                                                      # 反预乘
+    if P.get('sky_vblur'):
+        # 天空只在竖直方向柔化（只在天空像素之间平均）：暮光带的上下沿更柔，不像一条色带
+        sk = 1 - a
+        num = ndimage.gaussian_filter1d(env, P['sky_vblur'], axis=0)
+        den = ndimage.gaussian_filter1d(sk, P['sky_vblur'], axis=0)[..., None]
+        env = np.where(den > 1e-3, num / np.maximum(den, 1e-3), env / np.maximum(sk, 1e-3)[..., None]) * sk[..., None]
     zc = np.where(a > 1e-3, z, 1e6)
     wz, dist = world_heights(zc, cam)
     if P.get('cloudsea'):

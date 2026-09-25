@@ -22,9 +22,9 @@ def flakes(n, L, seed=7):
     return p, ph, sz
 
 
-def positions(p0, ph, t, cam_pos, L, wind, fall, sway):
-    """t 秒时各雪花的世界坐标（以镜头为中心平铺）。"""
-    drift = np.array([wind[0] * t, wind[1] * t, -fall * t])
+def positions(p0, ph, t, cam_pos, L, wind, fall, sway, carry=(0.0, 0.0, 0.0)):
+    """t 秒时各雪花的世界坐标（以镜头为中心平铺）。carry：雪场随镜头一起平移的量（见 render 的 follow）。"""
+    drift = np.array([wind[0] * t, wind[1] * t, -fall * t]) + np.asarray(carry, np.float64)
     w = sway * np.stack([np.sin(t * .9 + ph[:, 0]), np.sin(t * .7 + ph[:, 1]), .3 * np.sin(t * 1.3 + ph[:, 2])], -1)
     q = p0 + drift + w
     c = np.array(cam_pos)
@@ -66,14 +66,22 @@ def render(cam, W, H, depth, t, S, shutter=1 / 48.0):
     R = np.array(cam['rot'], np.float64)
     f = cam['lens'] / cam['sensor'] * max(W, H)
     loc1 = np.array(cam.get('loc_next', cam['loc']), np.float64)
+    # 镜头高速飞行时（S1、S3 约 100~170 m/s），按真实 180° 快门，近处雪花会拉成几百像素的虚线，像雨。
+    # shutter_k 缩短快门（拖影变短）；follow 让雪场随镜头平移一部分（雪花迎面扑来的速度变慢，是“飘”而不是“冲”）。
+    k = S.get('shutter_k', 1.0)
+    loc1 = loc + (loc1 - loc) * k
+    shutter = shutter * k
+    fol = S.get('follow', 0.0)
+    loc0 = np.array(S.get('loc0', cam['loc']), np.float64)
+    c0, c1 = fol * (loc - loc0), fol * (loc1 - loc0)
 
     def project(P, c):
         v = (P - c) @ R          # 世界 → 相机坐标（R 的列为相机轴）
         z = -v[:, 2]
         return W / 2 + v[:, 0] / np.maximum(z, 1e-3) * f, H / 2 - v[:, 1] / np.maximum(z, 1e-3) * f, z
 
-    P0 = positions(p0, ph, t, loc, L, S.get('wind', (.6, .2)), S.get('fall', 1.2), S.get('sway', .25))
-    P1 = positions(p0, ph, t + shutter, loc, L, S.get('wind', (.6, .2)), S.get('fall', 1.2), S.get('sway', .25))
+    P0 = positions(p0, ph, t, loc, L, S.get('wind', (.6, .2)), S.get('fall', 1.2), S.get('sway', .25), c0)
+    P1 = positions(p0, ph, t + shutter, loc, L, S.get('wind', (.6, .2)), S.get('fall', 1.2), S.get('sway', .25), c1)
     x0, y0, z0 = project(P0, loc)
     x1, y1, z1 = project(P1 + (loc - loc1), loc)      # 镜头自身的运动也会拉线
     near = S.get('near', .35)

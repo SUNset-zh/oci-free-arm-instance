@@ -20,8 +20,10 @@ F0, F1 = 1, 178
 POST = dict(exposure_keys=[[1, 3.3], [178, 3.1]], h_dens=1.5e-5, h_base=4000, h_scale=1200, dist_fog=80000,
             fog_max=.9, bloom=.05, bloom_thresh=1.2, punch=1.1, sat=1.15, vignette=.25,
             shadow_tint=(.92, .97, 1.08), high_tint=(1.03, 1.0, .97),
+            sky_vblur=55,                     # 暮光带上下沿柔化
+            # 镜头飞得快：雪场跟随镜头平移 90%、快门缩短到 0.3，雪是“飘”而不是迎面冲来的雨线
             snow=dict(n=22000, L=36.0, wind=(.9, -.3), fall=1.1, sway=.3, size=.016, focus=8000.0, coc=30.0,
-                      bright=.035, near=.3, color=(.55, .62, .8), seed=11))
+                      bright=.05, near=2.5, color=(.55, .62, .8), seed=11, follow=.9, shutter_k=.3))
 
 
 def main():

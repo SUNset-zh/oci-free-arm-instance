@@ -21,6 +21,8 @@ def main(d, f0=None, f1=None):
         P['spray']['tracks'] = json.load(open(os.path.join(d, 'horses.json')))
     out = os.path.join(d, 'graded'); os.makedirs(out, exist_ok=True)
     frames = sorted(int(k) for k in cams)
+    if P.get('snow'):
+        P['snow'].setdefault('loc0', cams[str(frames[0])]['loc'])     # 雪场随镜头平移的起点
     if f0 is not None:
         frames = [f for f in frames if f0 <= f <= f1]
     for f in frames:
