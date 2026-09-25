@@ -115,6 +115,14 @@ def vignette(img, amt=.25, soft=.65):
     return img * v[..., None]
 
 
+def frame_cam(cams, f, shutter=.5):
+    """第 f 帧的镜头参数，附上快门期间的位移终点（给雪花运动模糊用）。"""
+    c = dict(cams[str(f)])
+    n = cams.get(str(f + 1)) or cams.get(str(f))
+    c['loc_next'] = [a + (b - a) * shutter for a, b in zip(c['loc'], n['loc'])]
+    return c
+
+
 def params_at(P, f):
     """把 P 中以 _keys 结尾的关键帧参数 [[帧, 值], ...] 插值到第 f 帧。"""
     Q = {k: v for k, v in P.items() if not k.endswith('_keys')}
@@ -202,6 +210,25 @@ def process(exr_path, cam, P):
         env = env + vis * (disc[..., None] * SDp.get('radiance', 60.0) + halo[..., None]) * scol
         fogged = fogged + (a[..., None]) * (halo[..., None] * scol) * SDp.get('veil', .35)
     out = fogged * a[..., None] + env
+    # 镜头在云里：按镜头低于云顶的深度整体罩上云雾（穿云而出时由白到清）
+    if P.get('cloudsea'):
+        Cs = P['cloudsea']
+        ct = float(CS.cloud_top(np.array([[cam['loc'][0]]]), np.array([[cam['loc'][1]]]), P.get('time', 0.0), Cs)[0, 0])
+        inside = float(np.clip((ct + Cs.get('fog_top', 25.0) - cam['loc'][2]) / Cs.get('fog_depth', 90.0), 0, 1))
+        if inside > 0:
+            fc = (amb * Cs.get('amb', 1.0) * 1.6 + srgb * .55) * np.array(Cs.get('albedo', (.95, .96, 1.0)))
+            # 云里并不均匀：加一点缓慢流动的明暗
+            yy, xx = np.mgrid[0:H, 0:W]
+            wob = 1 + .06 * np.sin(xx / W * 5.0 + P.get('time', 0.0) * 1.3) * np.sin(yy / H * 3.0 - P.get('time', 0.0))
+            k = inside ** .7
+            out = out * (1 - k) + (fc[None, None, :] * wob[..., None]) * k
+    # 飘雪（三维雪花，近处焦外成光斑；被山体遮挡）
+    if P.get('snow'):
+        from post import snow as SN
+        Sp = P['snow']
+        dsnow = np.where(a > .5, dist, 1e9)
+        sb = SN.render(cam, W, H, dsnow, P.get('time', 0.0), Sp)
+        out = out + sb[..., None] * np.array(Sp.get('color', (.6, .65, .75)), np.float32)[None, None, :]
     if P.get('bloom', .06) > 0:
         out = bloom(out, P.get('bloom_thresh', 1.0), P.get('bloom', .06))
     disp = agx(out, P.get('exposure', 0.0), P.get('punch', 1.08), P.get('sat', 1.05))

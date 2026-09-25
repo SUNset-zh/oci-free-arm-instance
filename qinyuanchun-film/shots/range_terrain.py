@@ -15,12 +15,14 @@ PEAK = {"x": -250, "y": -600, "h0": 7010,
 TERRACE = {"step": 45, "amount": 0.5, "slope0": 0.85, "slope1": 1.4, "warp": 1.8, "dip": 0.12, "dip_az": 40}
 
 
-def spec(fine=None, mid=None, cam=(0, 0)):
+def spec(fine=None, mid=None, cam=(0, 0), terrace=None, mat=None):
     fine = dict(dict(ex=8000, ey=8000, cx=-250, cy=-600, cell=5), **(fine or {}))
     mid = dict(dict(ex=26000, ey=26000, cx=2000, cy=-3000, cell=12), **(mid or {}))
-    return {"lon": LON, "lat": LAT, "cam": list(cam), "peak": PEAK, "mat": {"slope_lo": .38, "slope_hi": .55, "flute": .12, "n1": .12, "n2": .08},
+    ter = dict(TERRACE, **(terrace or {}))
+    mt = dict({"slope_lo": .38, "slope_hi": .55, "flute": .12, "n1": .12, "n2": .08}, **(mat or {}))
+    return {"lon": LON, "lat": LAT, "cam": list(cam), "peak": PEAK, "mat": mt,
             "levels": [
-                dict(fine, zoom=13, terrace=TERRACE, detail={"noise": 2.0, "drops_per_cell": 1.2, "talus": 48},
+                dict(fine, zoom=13, terrace=ter, detail={"noise": 2.0, "drops_per_cell": 1.2, "talus": 48},
                      snow={"depth": 2.5, "lo": .25, "hi": .5, "talus": 45, "iters": 80, "d0": .15, "d1": .6}),
                 dict(mid, zoom=13, detail={"noise": 2.5, "drops_per_cell": 0.7, "talus": 44},
                      snow={"depth": 3.0, "lo": .25, "hi": .5, "talus": 45, "iters": 60, "d0": .15, "d1": .7}),
