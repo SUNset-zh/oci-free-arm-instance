@@ -26,6 +26,7 @@
 - `render.js`：用 Playwright/Chromium 逐帧截图并编码。`--stills 5,10` 只导出静帧。
 - `soundtrack.py`：用 numpy 合成配乐与音效，按键声、转场声按 `events.json` 与画面同步。
 - `build.sh`：一键出片，结果在 `out/`。
+- `release/`：已渲染好的成片（4K 与 1080p）。
 
 ## 重新生成
 
