@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>沁园春·雪</title>
+<!--
+  60 秒竖屏水墨动画（1080x1920）：毛泽东《沁园春·雪》。
+  一镜到底：镜头从飞雪的天空降下，沿雪景山水长卷横移，最后升向旭日；诗句以书法竖排逐字浮现。
+  画面由 render(t) 确定性绘制（canvas 山水 + DOM 文字），render.js 逐帧截图编码。
+  浏览器直接打开可预览：空格 暂停/播放，← → 跳转。
+-->
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: #000; overflow: hidden; }
+  #stage { position: relative; width: 1080px; height: 1920px; overflow: hidden; background: #d7dadd; }
+  canvas { position: absolute; inset: 0; width: 1080px; height: 1920px; }
+  .seg { position: absolute; right: 84px; top: 170px; display: flex; flex-direction: row-reverse; gap: 30px; }
+  .col { writing-mode: vertical-rl; font: 400 86px/1 "Ma Shan Zheng", "Noto Serif SC", serif; letter-spacing: 14px; color: #1c1a18;
+         text-shadow: 0 0 18px rgba(255,255,255,.55), 0 0 4px rgba(255,255,255,.4); }
+  .col span { display: inline-block; will-change: opacity, filter, transform; }
+  .title .col.big { font-size: 132px; letter-spacing: 20px; }
+  .title .col.small { font-size: 50px; letter-spacing: 12px; margin-top: 120px; }
+  .seal { display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; margin-top: 18px;
+          background: #b3261e; color: #f6e9dc; font: 400 40px/1 "Ma Shan Zheng"; border-radius: 6px; writing-mode: horizontal-tb;
+          text-shadow: none; letter-spacing: 0; }
+  .final .col { font-size: 96px; }
+  .credit { position: absolute; left: 90px; top: 300px; writing-mode: vertical-rl; font: 400 44px/1 "Ma Shan Zheng"; letter-spacing: 10px; color: #3a2f2a; opacity: 0; }
+  .credit .seal { width: 56px; height: 56px; font-size: 34px; margin-top: 16px; }
+  #fade { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="cv" width="1080" height="1920"></canvas>
+  <div id="texts"></div>
+  <div class="credit" id="credit">毛泽东《沁园春·雪》<span class="seal">雪</span></div>
+  <div id="fade"></div>
+</div>
+
+<script>
+const W = 1080, H = 1920, DURATION = 60;
+
+/* ======================= 诗句与时间 ======================= */
+// [开始, 结束, 列（从右到左）]
+const SEGS = [
+  [0.2, 3.0, ['沁园春·雪', '毛泽东'], 'title'],
+  [3.2, 9.0, ['北国风光', '千里冰封', '万里雪飘']],
+  [9.2, 15.0, ['望长城内外', '惟余莽莽', '大河上下', '顿失滔滔']],
+  [15.2, 22.0, ['山舞银蛇', '原驰蜡象', '欲与天公试比高']],
+  [22.2, 28.0, ['须晴日', '看红装素裹', '分外妖娆']],
+  [28.2, 34.0, ['江山如此多娇', '引无数英雄竞折腰']],
+  [34.2, 41.0, ['惜秦皇汉武', '略输文采', '唐宗宋祖', '稍逊风骚']],
+  [41.2, 48.0, ['一代天骄', '成吉思汗', '只识弯弓射大雕']],
+  [48.2, 99, ['俱往矣', '数风流人物', '还看今朝'], 'final'],
+];
+
+/* ======================= 工具 ======================= */
+const $ = id => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, p) => a + (b - a) * p;
+const prog = (t, a, b) => clamp((t - a) / (b - a));
+const smooth = p => p * p * (3 - 2 * p);
+const ss = (t, a, b) => smooth(prog(t, a, b));
+const easeOut = p => 1 - Math.pow(1 - p, 3);
+const hex = h => h[0] === '#' ? [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)) : h.match(/[\d.]+/g).slice(0, 3).map(Number);
+const mix = (a, b, p) => { const x = hex(a), y = hex(b); return `rgb(${x.map((v, i) => Math.round(lerp(v, y[i], p))).join(',')})`; };
+const mixA = (a, b, p, al) => { const x = hex(a), y = hex(b); return `rgba(${x.map((v, i) => Math.round(lerp(v, y[i], p))).join(',')},${al})`; };
+function rng(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
+function noise1(seed) {
+  const r = rng(seed), p = Array.from({ length: 512 }, r);
+  return x => { const i = Math.floor(x), f = x - i, u = f * f * (3 - 2 * f); return lerp(p[i & 511], p[(i + 1) & 511], u) * 2 - 1; };
+}
+// Catmull-Rom 插值：镜头连续移动，不在关键帧处停顿
+function spline(keys, t) {
+  if (t <= keys[0][0]) return keys[0][1];
+  if (t >= keys[keys.length - 1][0]) return keys[keys.length - 1][1];
+  let i = 0; while (t > keys[i + 1][0]) i++;
+  const p0 = keys[Math.max(0, i - 1)], p1 = keys[i], p2 = keys[i + 1], p3 = keys[Math.min(keys.length - 1, i + 2)];
+  const u = (t - p1[0]) / (p2[0] - p1[0]);
+  const m1 = (p2[1] - p0[1]) / (p2[0] - p0[0]) * (p2[0] - p1[0]), m2 = (p3[1] - p1[1]) / (p3[0] - p1[0]) * (p2[0] - p1[0]);
+  const u2 = u * u, u3 = u2 * u;
+  return (2 * u3 - 3 * u2 + 1) * p1[1] + (u3 - 2 * u2 + u) * m1 + (-2 * u3 + 3 * u2) * p2[1] + (u3 - u2) * m2;
+}
+
+/* ======================= 镜头 ======================= */
+const CAMX = [[0, 0], [3, 20], [9, 260], [15, 850], [22, 1550], [28, 2100], [34, 2600], [41, 3050], [48, 3300], [56, 3440], [60, 3490]];
+const camYAt = t => t < 8.5 ? lerp(950, 0, ss(t, 2.4, 8.5)) : t < 47 ? 0 : lerp(0, 680, ss(t, 47, 55)) + 30 * ss(t, 55, 60);
+
+/* ======================= 山体 ======================= */
+const LAYERS = [
+  { name: 'far', base: 1040, amp: 340, freq: 1 / 480, seed: 11, px: .2, py: .35, snow: '#eef1f4', light: '#c3cad2', ink: '#9aa4ae', line: .25, lw: 1.2, shade: .22 },
+  { name: 'mid', base: 1250, amp: 300, freq: 1 / 380, seed: 23, px: .45, py: .55, snow: '#f5f6f6', light: '#aeb3b8', ink: '#6c7176', line: .45, lw: 1.8, shade: .38 },
+  { name: 'near', base: 1480, amp: 220, freq: 1 / 320, seed: 37, px: .75, py: .8, snow: '#f8f8f6', light: '#9c9e9d', ink: '#48494b', line: .6, lw: 2.4, shade: .5 },
+  { name: 'fore', base: 1760, amp: 110, freq: 1 / 250, seed: 51, px: 1, py: 1, snow: '#fbfbf9', light: '#80807d', ink: '#2c2c2b', line: .75, lw: 3, shade: .55 },
+];
+LAYERS.forEach(L => L.n = noise1(L.seed));
+let gallopPhase = 0;
+function shape(L, wx, t) {
+  let v = 0, a = .55, f = 1;
+  for (let o = 0; o < 4; o++) { v += a * (1 - Math.abs(L.n(wx * L.freq * f + o * 17.3))); a *= .5; f *= 2.1; }
+  v = Math.pow(clamp(v / 1.02), 1.7);
+  if (L.name === 'near') {
+    // 蜡象：一段圆润起伏的雪原，随“原驰”奔腾
+    const w = ss(wx, 1250, 1450) * (1 - ss(wx, 2150, 2350));
+    const hump = .14 + .36 * Math.pow(Math.abs(Math.sin((wx + gallopPhase) * Math.PI / 250)), .55) * (.75 + .25 * L.n((wx + gallopPhase) / 250 + 40));
+    v = lerp(v, hump, w);
+    v += .42 * Math.exp(-Math.pow((wx - 2680) / 150, 2)); // 骑手所立的山冈
+  }
+  return v;
+}
+const growAt = t => 1 + .38 * ss(t, 19.2, 21.8) - .2 * ss(t, 23, 26);
+function ridgeY(L, wx, t, camY) {
+  const g = L.name === 'far' ? growAt(t) : L.name === 'mid' ? 1 + .15 * ss(t, 19.5, 21.8) - .08 * ss(t, 23, 26) : 1;
+  return L.base + camY * L.py - L.amp * g * shape(L, wx, t);
+}
+
+/* ======================= 预生成：宣纸纹理、雪花 ======================= */
+const paper = document.createElement('canvas'); paper.width = W; paper.height = H;
+{
+  const c = paper.getContext('2d'), r = rng(99);
+  c.fillStyle = '#fff'; c.fillRect(0, 0, W, H);
+  for (let i = 0; i < 26000; i++) { c.fillStyle = `rgba(90,80,70,${r() * .06})`; c.fillRect(r() * W, r() * H, 1 + r() * 1.5, 1 + r() * 1.5); }
+  c.lineWidth = .8;
+  for (let i = 0; i < 1400; i++) {
+    const x = r() * W, y = r() * H, a = r() * Math.PI, l = 8 + r() * 26;
+    c.strokeStyle = `rgba(110,95,80,${.03 + r() * .05})`;
+    c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + Math.cos(a) * l * .5 + r() * 6, y + Math.sin(a) * l * .5 + r() * 6, x + Math.cos(a) * l, y + Math.sin(a) * l); c.stroke();
+  }
+}
+const FLAKES = (() => { const r = rng(7); return Array.from({ length: 420 }, () => ({ x: r() * W, y: r() * H, v: 50 + r() * 140, s: 1.2 + r() * 4.2, ph: r() * 6.28, a: .45 + r() * .5 })); })();
+
+/* ======================= 剪影：骑手、大雕 ======================= */
+const HORSE = new Path2D('M-60,-70 C-40,-92 20,-92 45,-80 C55,-100 62,-120 70,-130 C78,-138 92,-136 98,-128 L104,-112 C100,-106 92,-108 86,-112 C80,-100 72,-86 62,-68 C58,-58 54,-52 50,-50 L58,-24 L62,0 L54,0 L48,-26 L40,-48 L30,-48 L34,-22 L30,0 L22,0 L24,-26 L22,-48 L-36,-50 L-44,-24 L-52,0 L-60,0 L-54,-28 L-52,-52 L-62,-50 L-66,-26 L-74,0 L-82,0 L-74,-30 L-70,-56 C-80,-60 -92,-58 -104,-40 C-98,-62 -84,-72 -60,-70 Z');
+const EAGLE = new Path2D('M0,-2 C-30,-8 -62,-28 -128,-20 C-96,-6 -72,4 -42,8 C-22,12 -10,18 0,26 C10,18 22,12 42,8 C72,4 96,-6 128,-20 C62,-28 30,-8 0,-2 Z M0,-10 A7,7 0 1 1 0.1,-10 Z M-9,24 L0,42 L9,24 Z');
+
+/* ======================= 文字 DOM ======================= */
+const textsEl = $('texts');
+const SEG_EL = SEGS.map(([a, b, cols, kind], si) => {
+  const d = document.createElement('div');
+  d.className = 'seg' + (kind ? ' ' + kind : '');
+  let k = 0;
+  d.innerHTML = cols.map((c, ci) => {
+    const cls = kind === 'title' ? (ci === 0 ? 'col big' : 'col small') : 'col';
+    const inner = [...c].map(ch => `<span data-k="${k++}">${ch}</span>`).join('');
+    return `<div class="${cls}">${inner}${kind === 'title' && ci === 1 ? '<span class="seal" data-k="' + (k++) + '">雪</span>' : ''}</div>`;
+  }).join('');
+  textsEl.appendChild(d);
+  return { el: d, a, b, chars: [...d.querySelectorAll('[data-k]')], kind };
+});
+
+/* ======================= 音效事件 ======================= */
+const SEALS = [['秦皇', 170, 250, 34.8], ['汉武', 350, 380, 35.5], ['唐宗', 170, 560, 37.9], ['宋祖', 350, 690, 38.6]];
+const EVENTS = [
+  ...SEGS.slice(1).map(s => ({ t: s[0], type: 'line' })),
+  ...SEALS.map(s => ({ t: s[3], type: 'seal' })),
+  { t: 22.3, type: 'gliss' }, { t: 45.4, type: 'arrow' }, { t: 48.3, type: 'gliss' }, { t: 52.5, type: 'swell' },
+];
+window.EVENTS = EVENTS.sort((a, b) => a.t - b.t);
+
+/* ======================= 渲染 ======================= */
+const cv = $('cv'), ctx = cv.getContext('2d');
+const SHADE = ctx.createLinearGradient(0, 0, 0, 190);
+SHADE.addColorStop(0, 'rgba(28,26,26,0)'); SHADE.addColorStop(.25, 'rgba(28,26,26,.85)'); SHADE.addColorStop(1, 'rgba(28,26,26,0)');
+
+function render(t) {
+  const camX = spline(CAMX, t), camY = camYAt(t);
+  const warm = ss(t, 22, 27.5), bright = ss(t, 48, 55);
+  // 蜡象奔腾：16.5–21.5s 相位推进
+  gallopPhase = 110 * (Math.max(0, Math.min(t, 21.5) - 16.5)) + 30 * Math.max(0, t - 21.5);
+
+  /* 天空 */
+  const sky = ctx.createLinearGradient(0, 0, 0, 1300);
+  const top = t < 22 ? mix('#7f8994', '#8e97a1', ss(t, 0, 9)) : mix(mix('#8e97a1', '#e3bfa9', warm), '#f0cdb0', bright);
+  const bot = mix(mix('#d6d9dc', '#f5e6d6', warm), '#fbf0e2', bright);
+  sky.addColorStop(0, top); sky.addColorStop(1, bot);
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+
+  /* 太阳 */
+  const sunVis = ss(t, 22.2, 24);
+  if (sunVis > 0) {
+    const sx = lerp(300, 540, bright), sy = lerp(lerp(1180, 700, easeOut(prog(t, 22.2, 27.5))), 760, bright), sr = lerp(78, 150, bright);
+    const glow = ctx.createRadialGradient(sx, sy, sr * .5, sx, sy, sr * (5 + 3 * bright));
+    glow.addColorStop(0, `rgba(245,170,120,${.55 * sunVis})`); glow.addColorStop(.35, `rgba(240,180,140,${.22 * sunVis})`); glow.addColorStop(1, 'rgba(240,190,150,0)');
+    ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
+    if (bright > 0) { // 光芒
+      ctx.save(); ctx.translate(sx, sy); ctx.rotate(t * .03);
+      for (let i = 0; i < 18; i++) {
+        ctx.rotate(Math.PI * 2 / 18);
+        const g = ctx.createLinearGradient(0, 0, 900, 0);
+        g.addColorStop(0, `rgba(255,220,180,${.16 * bright})`); g.addColorStop(1, 'rgba(255,220,180,0)');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(sr, -6); ctx.lineTo(900, -40); ctx.lineTo(900, 40); ctx.lineTo(sr, 6); ctx.fill();
+      }
+      ctx.restore();
+    }
+    const disk = ctx.createRadialGradient(sx - sr * .3, sy - sr * .3, sr * .1, sx, sy, sr);
+    disk.addColorStop(0, `rgba(226,74,52,${sunVis})`); disk.addColorStop(1, `rgba(186,36,30,${sunVis})`);
+    ctx.fillStyle = disk; ctx.beginPath(); ctx.arc(sx, sy, sr, 0, Math.PI * 2); ctx.fill();
+  }
+
+  /* 云：开头的雪云、古人之云 */
+  const clouds = (alpha, list, col) => {
+    if (alpha <= 0) return;
+    for (const [x, y, r] of list) {
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, `rgba(${col},${alpha})`); g.addColorStop(1, `rgba(${col},0)`);
+      ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x, y, r * 1.6, r * .7, 0, 0, Math.PI * 2); ctx.fill();
+    }
+  };
+  const d1 = t * 12;
+  clouds(.16 * (1 - ss(t, 7, 12)), [[200 + d1, 160, 320], [700 + d1, 110, 360], [980 - d1, 330, 300], [380 - d1 * .5, 470, 280]], '80,86,94');
+  const d2 = (t - 33) * 18;
+  clouds(.45 * ss(t, 33.5, 35) * (1 - ss(t, 40, 43)), [[120 + d2, 330, 190], [440 + d2, 480, 170], [160 + d2, 660, 210], [480 + d2, 820, 160]], '255,252,247');
+
+  /* 山体：远 → 近（“江山如此多娇”时镜头拉远） */
+  const zoom = 1 - .17 * ss(t, 28, 31.8) + .17 * ss(t, 33.6, 37.5);
+  const XL = W / 2 - W / 2 / zoom - 12, XR = W / 2 + W / 2 / zoom + 12;
+  ctx.save(); ctx.translate(W / 2, 1560); ctx.scale(zoom, zoom); ctx.translate(-W / 2, -1560);
+  LAYERS.forEach((L, li) => {
+    const offX = camX * L.px, pts = [];
+    let minY = H;
+    for (let sx = XL; sx <= XR; sx += 3) { const y = ridgeY(L, sx + offX, t, camY); pts.push([sx, y]); minY = Math.min(minY, y); }
+    const base = L.base + camY * L.py;
+    if (minY > H + 10) return;
+    const g = ctx.createLinearGradient(0, base - L.amp * 1.1, 0, base + 240);
+    const snow = mix(L.snow, '#f7d6cc', warm * .75 * (1 - li * .12));
+    g.addColorStop(0, snow); g.addColorStop(.42, mix(L.light, '#d9b6aa', warm * .35)); g.addColorStop(1, mix(L.ink, '#6d5b58', warm * .15));
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.moveTo(XL, H / zoom + 400);
+    pts.forEach(([x, y]) => ctx.lineTo(x, y));
+    ctx.lineTo(XR, H / zoom + 400); ctx.closePath(); ctx.fill();
+    // 山脊墨线
+    ctx.strokeStyle = `rgba(30,28,26,${L.line})`; ctx.lineWidth = L.lw;
+    ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke();
+    // 背光坡的墨色：每 6px 一条竖向渐变
+    ctx.save();
+    for (let i = 4; i < pts.length - 4; i++) {
+      const [x, y] = pts[i], slope = (pts[i + 4][1] - pts[i - 4][1]) / 2.7; // 平滑后的坡度
+      const sh = clamp(slope / 9) * L.shade;
+      if (sh < .02) continue;
+      ctx.globalAlpha = sh * .8; ctx.translate(x - 2, y + 2); ctx.fillStyle = SHADE; ctx.fillRect(0, 0, 4, 170); ctx.translate(-(x - 2), -(y + 2));
+    }
+    ctx.restore();
+    // 皴擦：坡面上的淡墨短线
+    ctx.strokeStyle = `rgba(40,36,34,${L.line * .3})`; ctx.lineWidth = L.lw * .8;
+    for (let i = 2; i < pts.length - 2; i += 8) {
+      const [x, y] = pts[i], slope = pts[i + 1][1] - pts[i - 1][1];
+      if (Math.abs(slope) < 5) continue;
+      ctx.beginPath(); ctx.moveTo(x, y + 8); ctx.quadraticCurveTo(x + slope * .6, y + 34, x + slope * 1.1, y + 70 + (i % 5) * 10); ctx.stroke();
+    }
+    // 山舞银蛇：山脊上游走的银光
+    const snake = ss(t, 15.4, 16.6) * (1 - ss(t, 21.5, 23));
+    if (snake > 0 && (L.name === 'mid' || L.name === 'far')) {
+      ctx.save(); ctx.setLineDash([70, 50]); ctx.lineDashOffset = -t * 160 * (L.name === 'mid' ? 1 : .7);
+      ctx.strokeStyle = `rgba(255,255,255,${.9 * snake})`; ctx.lineWidth = L.name === 'mid' ? 5 : 3.5;
+      ctx.shadowColor = 'rgba(255,255,255,.9)'; ctx.shadowBlur = 12;
+      ctx.beginPath(); pts.forEach(([x, y], i) => { const yy = y + 5 + Math.sin(x / 40 + t * 5) * 2.5; i ? ctx.lineTo(x, yy) : ctx.moveTo(x, yy); }); ctx.stroke();
+      ctx.restore();
+    }
+    // 长城：沿中景山脊逐段描出
+    if (L.name === 'mid') drawWall(L, offX, t, camY);
+    // 大河：近景山下
+    if (L.name === 'near') { drawRiver(L, offX, t, camY); drawRider(L, offX, t, camY); }
+    // 山间薄雾
+    const mg = ctx.createLinearGradient(0, base - 40, 0, base + 170);
+    mg.addColorStop(0, 'rgba(255,255,255,0)'); mg.addColorStop(.5, `rgba(250,248,244,${.38 - li * .07})`); mg.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = mg; ctx.fillRect(XL, base - 40, XR - XL, 210);
+  });
+  ctx.restore();
+
+  /* 古人印章 */
+  SEALS.forEach(([name, x, y, ts], i) => {
+    const a = ss(t, ts, ts + .5) * (1 - ss(t, 40.6, 42));
+    if (a <= 0) return;
+    const dim = i < 2 ? ss(t, 36.4, 37.4) : ss(t, 39.8, 40.8);
+    const sc = lerp(1.35, 1, easeOut(prog(t, ts, ts + .35)));
+    ctx.save(); ctx.translate(x + 60, y + 60); ctx.scale(sc, sc); ctx.rotate((i % 2 ? 1 : -1) * .05);
+    ctx.globalAlpha = a * (1 - .6 * dim);
+    ctx.fillStyle = mix('#b3261e', '#8a8580', dim * .8);
+    ctx.beginPath(); ctx.roundRect(-58, -58, 116, 116, 8); ctx.fill();
+    ctx.strokeStyle = 'rgba(246,233,220,.9)'; ctx.lineWidth = 3; ctx.strokeRect(-50, -50, 100, 100);
+    ctx.fillStyle = '#f6e9dc'; ctx.font = '46px "Ma Shan Zheng"'; ctx.textAlign = 'center';
+    ctx.fillText(name[0], 0, -6); ctx.fillText(name[1], 0, 42);
+    ctx.restore();
+  });
+
+  /* 大雕 */
+  const ea = ss(t, 41.3, 42.5) * (1 - ss(t, 48, 50));
+  if (ea > 0) {
+    const u = prog(t, 41.3, 50);
+    const ex = lerp(560, 120, u), ey = 640 - Math.sin(u * Math.PI) * 180 - u * 60;
+    ctx.save(); ctx.translate(ex, ey); ctx.rotate(-.12 + Math.sin(t * 1.3) * .05); ctx.scale(.95, .95 * (1 + .12 * Math.sin(t * 3.2)));
+    ctx.globalAlpha = ea; ctx.fillStyle = '#211d1b'; ctx.fill(EAGLE); ctx.restore();
+  }
+  /* 箭 */
+  if (t > 45.4 && t < 47.2) {
+    const u = easeOut(prog(t, 45.4, 46.6));
+    const bx = riderScreen.x + 62, by = riderScreen.y - 185;
+    const ex2 = lerp(bx, 250, u), ey2 = lerp(by, 470, u);
+    const ang = Math.atan2(470 - by, 250 - bx);
+    ctx.save(); ctx.globalAlpha = 1 - prog(t, 46.6, 47.2);
+    const tr = ctx.createLinearGradient(ex2, ey2, ex2 - Math.cos(ang) * 260, ey2 - Math.sin(ang) * 260);
+    tr.addColorStop(0, 'rgba(30,26,24,.5)'); tr.addColorStop(1, 'rgba(30,26,24,0)');
+    ctx.strokeStyle = tr; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(ex2, ey2); ctx.lineTo(ex2 - Math.cos(ang) * 260, ey2 - Math.sin(ang) * 260); ctx.stroke();
+    ctx.translate(ex2, ey2); ctx.rotate(ang); ctx.strokeStyle = '#1f1c1a'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(-60, 0); ctx.lineTo(0, 0); ctx.stroke();
+    ctx.fillStyle = '#1f1c1a'; ctx.beginPath(); ctx.moveTo(8, 0); ctx.lineTo(-6, -6); ctx.lineTo(-6, 6); ctx.fill();
+    ctx.restore();
+  }
+
+  /* 雪 */
+  const snowAmt = (1 - ss(t, 19, 24)) * (.6 + .4 * ss(t, 0, 2));
+  if (snowAmt > 0) {
+    for (const f of FLAKES) {
+      const y = (f.y + t * f.v) % (H + 60) - 30, x = (f.x + t * (18 + f.s * 4) + Math.sin(t * .9 + f.ph) * 22) % (W + 40) - 20;
+      ctx.fillStyle = `rgba(255,255,255,${f.a * snowAmt})`;
+      ctx.beginPath(); ctx.arc(x, y, f.s, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  /* 宣纸纹理 + 暗角 */
+  ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.globalAlpha = .55; ctx.drawImage(paper, 0, 0); ctx.restore();
+  const vg = ctx.createRadialGradient(W / 2, H * .45, H * .35, W / 2, H * .5, H * .78);
+  vg.addColorStop(0, 'rgba(40,30,20,0)'); vg.addColorStop(1, 'rgba(40,30,20,.22)');
+  ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+
+  /* 文字：逐字如墨晕开 */
+  SEG_EL.forEach((s, si) => {
+    const vis = t > s.a - .1 && t < s.b + .1;
+    s.el.style.visibility = vis ? 'visible' : 'hidden';
+    if (!vis) return;
+    const out = s.kind === 'final' ? 0 : ss(t, s.b - .7, s.b);
+    s.el.style.opacity = 1 - out;
+    s.el.style.filter = out > 0 ? `blur(${out * 10}px)` : 'none';
+    const rate = s.kind === 'title' ? .16 : .13;
+    s.chars.forEach((c, k) => {
+      const a = s.a + .25 + k * rate, p = prog(t, a, a + .7);
+      c.style.opacity = easeOut(p);
+      c.style.filter = p < 1 ? `blur(${(1 - p) * 9}px)` : 'none';
+      c.style.transform = `translateY(${(1 - easeOut(p)) * -14}px) scale(${1 + (1 - easeOut(p)) * .18})`;
+    });
+  });
+  $('credit').style.opacity = ss(t, 55.2, 56.4);
+  $('fade').style.opacity = ss(t, 59.2, 60);
+}
+
+/* ---- 长城 ---- */
+function drawWall(L, offX, t, camY) {
+  const A = 180, B = 1500, reveal = A + (t - 9.5) * 520;
+  if (reveal <= A) return;
+  const vis = 1 - ss(t, 26, 30);
+  if (vis <= 0) return;
+  const pts = [];
+  for (let wx = A; wx <= Math.min(B, reveal); wx += 6) {
+    const sx = wx - offX; if (sx < -40 || sx > W + 40) continue;
+    pts.push([sx, ridgeY(L, wx, t, camY) + 7, wx]);
+  }
+  if (pts.length < 2) return;
+  ctx.save(); ctx.globalAlpha = vis;
+  ctx.strokeStyle = '#3a3430'; ctx.lineWidth = 7;
+  ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke();
+  ctx.strokeStyle = 'rgba(250,250,248,.9)'; ctx.lineWidth = 2.2;
+  ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y - 3.5) : ctx.moveTo(x, y - 3.5)); ctx.stroke();
+  ctx.fillStyle = '#3a3430';
+  pts.forEach(([x, y, wx]) => {
+    if (Math.round(wx) % 12 === 0) ctx.fillRect(x - 1.5, y - 9, 3.5, 5);
+    if (Math.round(wx - A) % 156 === 0) {
+      ctx.fillStyle = '#3a3430'; ctx.fillRect(x - 10, y - 26, 20, 24);
+      ctx.fillStyle = '#f7f7f5'; ctx.fillRect(x - 11, y - 28, 22, 4);
+      ctx.fillStyle = '#3a3430';
+    }
+  });
+  ctx.restore();
+}
+
+/* ---- 大河：先流动，后冰封 ---- */
+let flow = 0;
+function flowAt(t) { // 积分：12.4s 前流速 70，之后 1.8s 内减到 0
+  const v0 = 70, a = 12.4, b = 14.2;
+  if (t < a) return v0 * t;
+  if (t < b) { const d = t - a, T = b - a; return v0 * a + v0 * (d - d * d / (2 * T)); }
+  return v0 * a + v0 * (b - a) / 2;
+}
+function drawRiver(L, offX, t, camY) {
+  const A = 620, B = 1960, oy = camY * L.py;
+  const cy = wx => 1585 + oy + 26 * Math.sin(wx / 160);
+  const hw = wx => (14 + 24 * Math.pow(Math.sin((wx - A) / (B - A) * Math.PI), .6));
+  const top = [], bot = [];
+  for (let wx = A; wx <= B; wx += 8) { const sx = wx - offX; if (sx < -60 || sx > W + 60) continue; top.push([sx, cy(wx) - hw(wx)]); bot.push([sx, cy(wx) + hw(wx)]); }
+  if (top.length < 2) return;
+  const freeze = ss(t, 12.8, 14.4);
+  ctx.fillStyle = mix('#b9c6cf', '#e6ecef', freeze);
+  ctx.beginPath(); top.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); [...bot].reverse().forEach(([x, y]) => ctx.lineTo(x, y)); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(40,36,34,.55)'; ctx.lineWidth = 2;
+  ctx.beginPath(); top.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke();
+  ctx.beginPath(); bot.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke();
+  // 波纹（滔滔）
+  const fl = flowAt(t);
+  ctx.strokeStyle = `rgba(60,70,80,${.45 * (1 - freeze)})`; ctx.lineWidth = 2;
+  for (let k = 0; k < 46; k++) {
+    const wx = A + ((k * 97 + fl) % (B - A)), sx = wx - offX;
+    if (sx < -20 || sx > W + 20) continue;
+    const y = cy(wx) + ((k % 3) - 1) * hw(wx) * .5;
+    ctx.beginPath(); ctx.moveTo(sx - 14, y); ctx.quadraticCurveTo(sx, y - 5, sx + 14, y); ctx.stroke();
+  }
+  // 冰裂纹
+  const cr = ss(t, 13.8, 14.8);
+  if (cr > 0) {
+    ctx.strokeStyle = `rgba(120,135,145,${.7 * cr})`; ctx.lineWidth = 1.5;
+    const r = rng(5);
+    for (let k = 0; k < 26; k++) {
+      const wx = A + r() * (B - A), sx = wx - offX, y = cy(wx) + (r() - .5) * hw(wx);
+      if (sx < -30 || sx > W + 30) { r(); r(); continue; }
+      ctx.beginPath(); ctx.moveTo(sx, y); ctx.lineTo(sx + (r() - .5) * 40 * cr, y + (r() - .5) * 14); ctx.lineTo(sx + (r() - .5) * 60 * cr, y + (r() - .5) * 18); ctx.stroke();
+    }
+  }
+}
+
+/* ---- 骑手：弯弓 ---- */
+const riderScreen = { x: 0, y: 0 };
+function drawRider(L, offX, t, camY) {
+  const a = ss(t, 40.8, 42.3) * (1 - ss(t, 48, 50.5));
+  const wx = 2680, sx = wx - offX, sy = ridgeY(L, wx, t, camY) + 4;
+  riderScreen.x = sx; riderScreen.y = sy;
+  if (a <= 0 || sx < -200 || sx > W + 200) return;
+  ctx.save(); ctx.translate(sx, sy); ctx.scale(1.25, 1.25); ctx.globalAlpha = a;
+  if (t > 48) ctx.filter = `blur(${ss(t, 48, 50.5) * 8}px)`;
+  ctx.fillStyle = '#211d1b'; ctx.fill(HORSE);
+  // 骑手
+  const pull = ss(t, 42.8, 45.2) * (t < 45.4 ? 1 : 1 - ss(t, 45.4, 45.6));
+  ctx.strokeStyle = '#211d1b'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.lineWidth = 11; ctx.beginPath(); ctx.moveTo(0, -86); ctx.lineTo(8, -138); ctx.stroke();
+  ctx.fillStyle = '#211d1b'; ctx.beginPath(); ctx.arc(12, -152, 11, 0, Math.PI * 2); ctx.fill();
+  ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(8, -130); ctx.lineTo(60, -170); ctx.stroke();           // 持弓手
+  const hx = lerp(40, 2, pull), hy = lerp(-158, -142, pull);
+  ctx.beginPath(); ctx.moveTo(8, -130); ctx.lineTo(hx, hy); ctx.stroke();                                   // 拉弦手
+  ctx.lineWidth = 4.5; ctx.beginPath(); ctx.moveTo(46, -212); ctx.quadraticCurveTo(96 + pull * 8, -190, 76, -130); ctx.stroke(); // 弓
+  ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(46, -212); ctx.lineTo(hx, hy); ctx.lineTo(76, -130); ctx.stroke();         // 弦
+  if (t < 45.4) { ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(hx + 70, hy - 44); ctx.stroke(); }        // 箭
+  // 披风随风
+  ctx.fillStyle = 'rgba(33,29,27,.85)';
+  ctx.beginPath(); ctx.moveTo(4, -134); ctx.quadraticCurveTo(-30, -130 + Math.sin(t * 4) * 6, -52, -112 + Math.sin(t * 4 + 1) * 8); ctx.quadraticCurveTo(-24, -112, 0, -100); ctx.fill();
+  ctx.restore();
+}
+
+window.render = render;
+window.DURATION = DURATION;
+
+/* ======================= 浏览器预览 ======================= */
+if (!navigator.webdriver) {
+  let t0 = performance.now(), paused = false, cur = 0;
+  const stage = $('stage');
+  const fit = () => { const s = Math.min(innerWidth / W, innerHeight / H); stage.style.transform = `scale(${s})`; stage.style.transformOrigin = '0 0'; };
+  addEventListener('resize', fit); fit();
+  addEventListener('keydown', e => {
+    if (e.code === 'Space') { paused = !paused; t0 = performance.now() - cur * 1000; }
+    if (e.code === 'ArrowRight') { cur = Math.min(DURATION, cur + 1); t0 = performance.now() - cur * 1000; }
+    if (e.code === 'ArrowLeft') { cur = Math.max(0, cur - 1); t0 = performance.now() - cur * 1000; }
+  });
+  const loop = () => { if (!paused) cur = ((performance.now() - t0) / 1000) % DURATION; render(cur); requestAnimationFrame(loop); };
+  document.fonts.ready.then(loop);
+} else {
+  document.fonts.load('46px "Ma Shan Zheng"').then(() => render(0));
+}
+</script>
+</body>
+</html>
