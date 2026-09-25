@@ -22,13 +22,13 @@ FONTS = '/tmp/claude-0/-home-user-oci-free-arm-instance/33674d5b-35e4-5b5a-b79d-
 SHOTS = [
     ('s0', 'final/f{:04d}.png', 0.0, 3.6, 98, .5),
     ('s1b', 'graded/g{:04d}.png', 3.6, 6.4, 178, .5),
-    ('s2', 'graded/g{:04d}.png', 10.0, 3.4, 108, .5),
-    ('s3', 'graded/g{:04d}.png', 13.4, 4.2, 125, .6),
+    ('s2', 'graded/g{:04d}.png', 10.0, 3.1, 108, .5),       # 切到黄河落在“惟余莽莽；”的停顿里
+    ('s3', 'graded/g{:04d}.png', 13.1, 4.5, 125, .6),
     ('s4', 'graded/g{:04d}.png', 17.6, 6.8, 185, .5),
     ('s5', 'graded/g{:04d}.png', 24.4, 5.6, 154, .5),
     ('s6', 'graded/g{:04d}.png', 30.0, 6.4, 173, .7),
     ('s7', 'graded/g{:04d}.png', 36.4, 8.9, 233, .6),
-    ('s8', 'graded/g{:04d}.png', 45.3, 7.0, 187, .6),
+    ('s8', 'graded/g{:04d}.png', 45.3, 7.0, 187, .8),       # 雕飞进云里：溶解长一点（S9 开头是均匀的云内）
     ('s9', 'graded/g{:04d}.png', 52.3, 7.7, 194, 0.0),
 ]
 
@@ -122,7 +122,7 @@ def frame(root, k, rng):
     tl, ta = end_title(t)
     if tl is not None:
         arr, sh = tl
-        img = img * (1 - .35 * ta * sh[..., None])                      # 字后面一层很淡的暗影，保证可读
+        img = img * (1 - .45 * ta * sh[..., None])                      # 字后面一层很淡的暗影，保证可读
         img = img * (1 - ta * arr[..., None]) + ta * arr[..., None] * np.array([.97, .97, .96])
     # 片尾淡出到黑
     img *= 1 - np.clip((t - 59.25) / .7, 0, 1)
