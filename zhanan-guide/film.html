@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>渣男指导手册</title>
+<!--
+  30 秒竖屏短片（1080x1920）。画面由 render(t) 按时间确定性绘制，render.js 逐帧截图编码。
+  浏览器直接打开可预览：空格 暂停/播放，← → 跳转。
+-->
+<style>
+  :root {
+    --paper: #f7f7f5;
+    --ink: #17181c;
+    --grey: #8b8d93;
+    --line: #dcdcd8;
+    --red: #e5412d;
+    --green: #1f9d57;
+    --warm: #f39a2e;
+    --water: #dcebfa;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: #000; overflow: hidden; }
+  body { font-family: "Noto Sans SC", "Inter", sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
+
+  #stage { position: relative; width: 1080px; height: 1920px; overflow: hidden; background: #cfd0cc; perspective: 2600px; }
+  .page { position: absolute; inset: 0; background-color: var(--paper);
+          background-image: radial-gradient(circle, #e2e2de 1.6px, transparent 2px);
+          background-size: 40px 40px; background-position: 20px 20px;
+          transform-origin: 0 50%; backface-visibility: hidden; will-change: transform; overflow: hidden; }
+  .page::after { content: ""; position: absolute; inset: 36px; border: 2px solid rgba(23,24,28,.10); border-radius: 18px; pointer-events: none; }
+  .shade { position: absolute; inset: 0; pointer-events: none; opacity: 0; z-index: 50; }
+  .shade.top { background: linear-gradient(90deg, rgba(0,0,0,.0), rgba(0,0,0,.25)); }
+  .shade.under { background: linear-gradient(90deg, rgba(0,0,0,.28), rgba(0,0,0,0) 70%); }
+
+  .hd, .ft { position: absolute; left: 80px; right: 80px; display: flex; justify-content: space-between;
+             font: 500 28px/1 "Noto Sans SC"; color: var(--grey); letter-spacing: 2px; }
+  .hd { top: 84px; } .ft { bottom: 84px; font-size: 24px; }
+  .hd b { color: var(--ink); font-weight: 700; }
+  .pg { font-family: "Inter"; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  .title { position: absolute; left: 80px; right: 80px; top: 210px; display: flex; gap: 36px; align-items: center; }
+  .num { flex: none; width: 150px; height: 150px; border-radius: 50%; border: 6px solid var(--ink);
+         display: flex; align-items: center; justify-content: center; font: 700 64px/1 "Inter"; letter-spacing: -2px; background: #fff; }
+  .num.good { border-color: var(--green); color: var(--green); }
+  .title h2 { font: 700 104px/1.05 "Noto Sans SC"; letter-spacing: -2px; }
+  .title p { font: 400 42px/1.3 "Noto Sans SC"; color: var(--grey); margin-top: 14px; }
+
+  svg.ill { position: absolute; left: 90px; top: 470px; width: 900px; height: 900px; overflow: visible;
+            fill: none; stroke: var(--ink); stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+  svg .w { fill: #fff; }
+  svg .ink { fill: var(--ink); stroke: none; }
+  svg .fig, svg [data-pop] { transform-box: fill-box; transform-origin: 50% 100%; }
+  svg [data-pop].c { transform-origin: 50% 50%; }
+  svg text { fill: var(--ink); stroke: none; font-family: "Noto Sans SC", "Inter"; }
+
+  .result { position: absolute; left: 80px; right: 80px; top: 1510px; font: 500 50px/1.35 "Noto Sans SC"; }
+  .result em { font-style: normal; color: var(--red); }
+  .result.good em { color: var(--green); }
+
+  .stamp { position: absolute; right: 96px; top: 1330px; padding: 18px 34px 20px; border: 8px solid currentColor; border-radius: 22px;
+           font: 700 64px/1 "Noto Sans SC"; letter-spacing: 4px; color: var(--red); opacity: 0; background: rgba(247,247,245,.72);
+           box-shadow: inset 0 0 0 4px var(--paper), inset 0 0 0 7px currentColor; }
+  .stamp.good { color: var(--green); }
+
+  /* 分节页 */
+  .part { position: absolute; left: 80px; right: 80px; top: 360px; }
+  .part .k { font: 700 64px/1 "Inter"; letter-spacing: 6px; color: var(--grey); }
+  .part h1 { font: 700 128px/1.1 "Noto Sans SC"; letter-spacing: -3px; margin-top: 30px; }
+  .part .s { font: 500 48px/1 "Noto Sans SC"; margin-top: 40px; }
+
+  /* 封面 */
+  .cover-k { position: absolute; left: 80px; top: 230px; font: 500 40px/1 "Noto Sans SC"; color: var(--grey); letter-spacing: 8px; }
+  .cover-t { position: absolute; left: 76px; top: 300px; font: 700 196px/1.04 "Noto Sans SC"; letter-spacing: -6px; }
+  .cover-info { position: absolute; left: 80px; right: 80px; top: 1520px; display: flex; justify-content: space-between; align-items: flex-end;
+                border-top: 4px solid var(--ink); padding-top: 28px; font: 500 40px/1.4 "Noto Sans SC"; }
+  .cover-info span { color: var(--grey); font-size: 30px; }
+  .sticker { position: absolute; right: 96px; top: 270px; width: 220px; height: 220px; border-radius: 50%; background: var(--red);
+             color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center;
+             font: 700 44px/1.2 "Noto Sans SC"; text-align: center; }
+  .sticker small { font: 700 26px/1 "Inter"; letter-spacing: 3px; opacity: .85; margin-top: 6px; }
+
+  /* 结尾 */
+  .end { position: absolute; left: 80px; right: 80px; top: 1060px; font: 700 112px/1.25 "Noto Sans SC"; letter-spacing: -3px; }
+  .zha { position: relative; display: inline-block; }
+  .strike { position: absolute; left: -8%; right: -8%; top: 52%; height: 14px; border-radius: 7px; background: var(--red);
+            transform-origin: 0 50%; transform: scaleX(0) rotate(-8deg); }
+  .nuan { position: absolute; left: 50%; top: -0.78em; transform: translateX(-50%); color: var(--red); font-size: .72em; opacity: 0; }
+  .end-ft { position: absolute; left: 80px; right: 80px; top: 1470px; font: 400 38px/1.7 "Noto Sans SC"; color: var(--grey); }
+  .end-ft b { color: var(--ink); font-weight: 700; }
+
+  #fade { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; z-index: 999; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div id="fadeHolder"></div>
+
+<script>
+/* ======================= 素材 ======================= */
+const HEART = 'M0,12 C-20,-2 -22,-18 -11,-22 C-5,-24 0,-19 0,-14 C0,-19 5,-24 11,-22 C22,-18 20,-2 0,12 Z';
+const HEART_L = 'M0,-14 C0,-19 -5,-24 -11,-22 C-22,-18 -20,-2 0,12 L-3,2 L3,-4 Z';
+const HEART_R = 'M0,-14 C0,-19 5,-24 11,-22 C22,-18 20,-2 0,12 L-3,2 L3,-4 Z';
+const FISH = '<path class="w" d="M-40,0 C-20,-24 20,-24 36,0 C20,24 -20,24 -40,0Z"/><path class="w" d="M36,0 L62,-18 L57,0 L62,18Z"/><circle class="ink" cx="-22" cy="-5" r="4"/>';
+
+// 线稿小人：脚底在 (0,0)，头顶约 -226
+function fig(o) {
+  const [la, ra] = o.arms || [[-46, -88], [46, -88]];
+  const m = o.mood || 'smile';
+  const mouths = {
+    smile: 'M-11,-180 Q0,-170 11,-180',
+    frown: 'M-11,-172 Q0,-182 11,-172',
+    smirk: 'M-12,-178 Q2,-172 13,-183',
+  };
+  let mouth = `<path d="${mouths[m]}" ${o.swap ? `data-out="${o.swap},${o.swap + .15}"` : ''}/>`;
+  if (o.swap) mouth += `<path d="${mouths.frown}" data-fade="${o.swap},${o.swap + .15}"/>`;
+  const blush = o.blush ? '<circle cx="-20" cy="-182" r="6" fill="#ffb3b3" stroke="none"/><circle cx="20" cy="-182" r="6" fill="#ffb3b3" stroke="none"/>' : '';
+  return `<g transform="translate(${o.x} ${o.y}) scale(${o.s || 1})"><g class="fig" ${o.id ? `id="${o.id}"` : ''} ${o.pop != null ? `data-pop="${o.pop}"` : ''}>
+    <line x1="-14" y1="-72" x2="-20" y2="0"/><line x1="14" y1="-72" x2="20" y2="0"/>
+    <line x1="-26" y1="-138" x2="${la[0]}" y2="${la[1]}"/><line x1="26" y1="-138" x2="${ra[0]}" y2="${ra[1]}"/>
+    <path class="w" d="M-30,-148 Q0,-158 30,-148 L25,-70 Q0,-64 -25,-70 Z"/>
+    <circle class="w" cy="-192" r="34"/>
+    <circle class="ink" cx="-11" cy="-195" r="3.8"/><circle class="ink" cx="11" cy="-195" r="3.8"/>
+    ${blush}${mouth}${o.extra || ''}
+  </g></g>`;
+}
+function wavy(x1, y1, x2, y2, amp, n) {
+  const pts = [];
+  const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy), nx = -dy / len, ny = dx / len;
+  for (let i = 0; i <= 60; i++) {
+    const p = i / 60, s = Math.sin(p * Math.PI * 2 * n) * amp;
+    pts.push(`${(x1 + dx * p + nx * s).toFixed(1)},${(y1 + dy * p + ny * s).toFixed(1)}`);
+  }
+  return 'M' + pts.join(' L');
+}
+function knot(cx, cy) {
+  let seed = 11; const r = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+  const pts = [];
+  for (let i = 0; i < 46; i++) {
+    const a = i * 0.9 + r() * 0.8, rad = 30 + r() * 70;
+    pts.push(`${(cx + Math.cos(a) * rad).toFixed(1)},${(cy + Math.sin(a) * rad * 0.7).toFixed(1)}`);
+  }
+  return 'M' + pts.join(' L');
+}
+const hd = n => `<div class="hd"><b>渣男指导手册</b><span class="pg">P.${String(n).padStart(2, '0')}</span></div>`;
+
+/* ======================= 页面 ======================= */
+// [id, 开始, 结束(开始翻页)]
+const PAGES = [
+  ['p0', 0, 2.9], ['p1', 2.9, 4.3], ['p2', 4.3, 8.5], ['p3', 8.5, 12.7], ['p4', 12.7, 16.6],
+  ['p5', 16.6, 18.0], ['p6', 18.0, 20.8], ['p7', 20.8, 23.6], ['p8', 23.6, 26.4], ['p9', 26.4, 99],
+];
+const FLIP = 0.6;
+
+const html = {};
+
+// ---------- 封面 ----------
+html.p0 = `
+  <div class="hd"><b>使用说明书</b><span class="pg">ZN-01</span></div>
+  <div class="cover-k" data-rise="0.15">新手入门版</div>
+  <div class="cover-t"><div data-rise="0.25">渣男</div><div data-rise="0.38">指导手册</div></div>
+  <div class="sticker" data-pop="1.7">30 秒<br>速成<small>ZN-01</small></div>
+  <svg class="ill" viewBox="0 0 900 900" style="top:640px">
+    <line x1="160" y1="820" x2="740" y2="820" data-draw="0.4,0.8" pathLength="1"/>
+    ${fig({ x: 450, y: 820, s: 2.3, pop: 0.5, mood: 'smirk', arms: [[-46, -88], [62, -118]],
+      extra: `<g data-drop="1.15"><rect class="ink" x="-30" y="-204" width="26" height="17" rx="6"/><rect class="ink" x="4" y="-204" width="26" height="17" rx="6"/><line x1="-4" y1="-198" x2="4" y2="-198"/></g>
+              <g data-pop="1.45" class="c"><line x1="62" y1="-118" x2="78" y2="-170" stroke="#2f8a4e" stroke-width="3"/><circle cx="80" cy="-178" r="11" fill="#e5412d" stroke="none"/><path d="M74,-180 q6,-6 12,0" stroke="#fff" stroke-width="2"/></g>` })}
+    <g data-pop="1.9" class="c"><path d="M720,330 l10,26 26,10 -26,10 -10,26 -10,-26 -26,-10 26,-10z" class="ink"/></g>
+    <g data-pop="2.0" class="c"><path d="M170,420 l7,18 18,7 -18,7 -7,18 -7,-18 -18,-7 18,-7z" class="ink"/></g>
+  </svg>
+  <div class="cover-info" data-rise="2.0"><div>共 6 步<br><span>前 3 步请勿模仿</span></div><span>仅供娱乐</span></div>`;
+
+// ---------- 第一部分 ----------
+html.p1 = `${hd(1)}
+  <div class="part"><div class="k" data-rise="3.05">PART 1</div><h1 data-rise="3.15">如何做一个<br>渣男</h1><div class="s" data-rise="3.5" style="color:var(--red)">（错误示范，请勿模仿）</div></div>
+  <svg class="ill" viewBox="0 0 900 900" style="top:900px">
+    <path d="M450,120 L720,600 L180,600 Z" stroke="var(--red)" stroke-width="12" data-draw="3.2,3.7" pathLength="1"/>
+    <g data-pop="3.65" class="c"><line x1="450" y1="280" x2="450" y2="450" stroke="var(--red)" stroke-width="22"/><circle cx="450" cy="520" r="15" fill="var(--red)" stroke="none"/></g>
+  </svg>
+  <div class="ft"><span>ZN-01</span><span>仅供娱乐</span></div>`;
+
+// 01 中央空调
+const P2_X = [150, 350, 550, 750];
+html.p2 = `${hd(2)}
+  <div class="title"><div class="num" data-pop="4.45">01</div><div><h2 data-rise="4.5">中央空调</h2><p data-rise="4.6">对谁都暖一点</p></div></div>
+  <svg class="ill" viewBox="0 0 900 900">
+    ${P2_X.map((x, i) => `<path class="flow" id="wave${i}" d="${wavy(330 + i * 80, 215, x, 500, 10, 3)}" stroke="var(--warm)" stroke-width="6" opacity="0"/>`).join('')}
+    <g id="ac">
+      <rect class="w" x="230" y="60" width="440" height="150" rx="26" data-draw="4.6,5.1" pathLength="1"/>
+      <rect x="230" y="60" width="440" height="150" rx="26" stroke="var(--red)" stroke-width="7" data-fade="6.5,6.7"/>
+      <line x1="270" y1="168" x2="630" y2="168" data-draw="5.0,5.3" pathLength="1"/>
+      <line x1="290" y1="186" x2="610" y2="186" data-draw="5.05,5.35" pathLength="1"/>
+      <g transform="translate(290 110) scale(1.1)"><path d="${HEART}" fill="var(--red)" stroke="none" data-pop="5.1" class="c"/></g>
+      <text x="560" y="128" font-size="40" font-family="Inter" font-weight="700" data-fade="5.1,5.3" id="acTemp">26°</text>
+    </g>
+    <polyline points="690,70 730,40 712,92 760,62" stroke="var(--red)" stroke-width="7" data-draw="6.6,6.8" pathLength="1"/>
+    ${[[640, 30, 6.6], [690, 0, 6.72], [600, 10, 6.84]].map(([x, y, t]) => `<circle cx="${x}" cy="${y}" r="${26}" fill="#c9ccd1" stroke="none" data-pop="${t}" class="c smoke"/>`).join('')}
+    ${P2_X.map((x, i) => fig({ x, y: 820, s: 0.9, pop: 4.9 + i * 0.1, swap: 6.85 + i * 0.04 })).join('')}
+    ${P2_X.map((x, i) => `<g transform="translate(${x} 548) scale(1.5)"><g data-pop="${5.6 + i * 0.1}" class="c"><path class="hl" d="${HEART_L}" fill="var(--red)" stroke="none"/><path class="hr" d="${HEART_R}" fill="var(--red)" stroke="none"/></g></g>`).join('')}
+  </svg>
+  <div class="result" data-rise="7.0">结果：<em>过热短路</em>，一个都没暖到。</div>
+  <div class="stamp" data-stamp="7.35">✗ 错误示范</div>
+  <div class="ft"><span>ZN-01</span><span>请勿模仿</span></div>`;
+
+// 02 海王
+const TIPS = [[350, 150], [450, 120], [560, 110], [670, 120], [780, 150]];
+const FISH_POS = [[370, 650], [470, 710], [570, 640], [665, 712], [770, 660]];
+html.p3 = `${hd(3)}
+  <div class="title"><div class="num" data-pop="8.65">02</div><div><h2 data-rise="8.7">海王</h2><p data-rise="8.8">鱼塘里养一大群</p></div></div>
+  <svg class="ill" viewBox="0 0 900 900">
+    <ellipse cx="560" cy="680" rx="330" ry="140" fill="var(--water)" data-draw="8.8,9.3" pathLength="1"/>
+    <line x1="10" y1="562" x2="255" y2="562" data-draw="8.8,9.1" pathLength="1"/>
+    <ellipse id="ripple" cx="380" cy="640" rx="40" ry="12" stroke="#7fb1e6" stroke-width="5" opacity="0"/>
+    ${FISH_POS.map((p, i) => `<line id="fl${i}" x1="${TIPS[i][0]}" y1="${TIPS[i][1]}" x2="${p[0]}" y2="${p[1]}" stroke-width="2.5" data-draw="${9.75 + i * 0.05},${10.05 + i * 0.05}" pathLength="1"/>`).join('')}
+    ${FISH_POS.map((p, i) => `<g id="fish${i}" transform="translate(${p[0]} ${p[1]}) scale(${i % 2 ? -0.9 : 0.9} 0.9)"><g data-pop="${9.55 + i * 0.08}" class="c">${FISH}</g></g>`).join('')}
+    <path id="knot" d="${knot(565, 600)}" stroke-width="3" data-draw="10.9,11.35" pathLength="1"/>
+    <g id="rods">${TIPS.map((p, i) => `<line x1="182" y1="478" x2="${p[0]}" y2="${p[1]}" stroke-width="4" data-draw="${9.3 + i * 0.06},${9.6 + i * 0.06}" pathLength="1"/>`).join('')}</g>
+    ${fig({ x: 140, y: 560, id: 'fisher', pop: 9.0, swap: 10.8, arms: [[-46, -88], [44, -84]] })}
+    ${[[330, 600, -1], [360, 580, -.4], [400, 585, .4], [430, 605, 1]].map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="10" fill="#7fb1e6" stroke="none" data-pop="${11.42 + i * .03}" class="c splash"/>`).join('')}
+  </svg>
+  <div class="result" data-rise="11.3">结果：<em>线全缠一起</em>，自己掉进塘里。</div>
+  <div class="stamp" data-stamp="11.7">✗ 错误示范</div>
+  <div class="ft"><span>ZN-01</span><span>请勿模仿</span></div>`;
+
+// 03 时间管理大师
+const ROWS_Y = [230, 360, 490, 620];
+const BLOCKS = [['约会 A', '#ffd6de'], ['约会 B', '#d9e8ff'], ['约会 C', '#ffe9c7'], ['约会 D', '#ddf3e4']];
+const BUBBLES = [[150, 170, '在吗？'], [520, 150, '人呢？'], [210, 400, '？？？'], [560, 360, '在干嘛'], [130, 610, '在吗？'], [540, 590, '回我'], [350, 280, '说话！'], [380, 720, '在吗？']];
+html.p4 = `${hd(4)}
+  <div class="title"><div class="num" data-pop="12.85">03</div><div><h2 data-rise="12.9">时间管理大师</h2><p data-rise="13.0">七点一个，八点一个</p></div></div>
+  <svg class="ill" viewBox="0 0 900 900">
+    <g id="card">
+      <rect class="w" x="110" y="40" width="680" height="740" rx="34" data-draw="13.0,13.4" pathLength="1"/>
+      <text x="160" y="120" font-size="44" font-weight="700" data-fade="13.2,13.4">今晚行程</text>
+      <circle class="w" cx="712" cy="104" r="36" data-draw="13.3,13.55" pathLength="1"/>
+      <line id="hand1" x1="712" y1="104" x2="712" y2="80" stroke-width="5"/>
+      <line id="hand2" x1="712" y1="104" x2="730" y2="104" stroke-width="5"/>
+      ${ROWS_Y.map((y, i) => `<text x="150" y="${y + 12}" font-size="34" font-family="Inter" font-weight="600" fill="#8b8d93" data-fade="${13.3 + i * .05},${13.5 + i * .05}">${19 + i}:00</text><line x1="150" y1="${y + 58}" x2="750" y2="${y + 58}" stroke="#e4e4e0" stroke-width="3" data-draw="13.3,13.6" pathLength="1"/>`).join('')}
+      ${BLOCKS.map(([n, c], i) => `<g id="blk${i}" class="blk"><rect x="290" y="${ROWS_Y[i] - 45}" width="440" height="90" rx="20" fill="${c}"/>
+        <g transform="translate(335 ${ROWS_Y[i]}) scale(1.1)"><path d="${HEART}" fill="var(--red)" stroke="none"/></g>
+        <text x="375" y="${ROWS_Y[i] + 13}" font-size="38" font-weight="500">${n}</text></g>`).join('')}
+    </g>
+    ${BUBBLES.map(([x, y, s], i) => `<g transform="translate(${x} ${y})"><g data-pop="${14.7 + i * 0.07}" class="c">
+        <path class="w" d="M0,0 h170 a20,20 0 0 1 20,20 v44 a20,20 0 0 1 -20,20 h-120 l-24,20 4,-20 h-30 a20,20 0 0 1 -20,-20 v-44 a20,20 0 0 1 20,-20z" stroke-width="4"/>
+        <text x="95" y="56" font-size="34" font-weight="700" text-anchor="middle">${s}</text></g></g>`).join('')}
+    <g transform="translate(790 40)"><g data-pop="15.0" class="c"><circle r="54" fill="var(--red)" stroke="#fff" stroke-width="6"/><text y="13" font-size="38" font-family="Inter" font-weight="700" text-anchor="middle" fill="#fff" style="fill:#fff">99+</text></g></g>
+  </svg>
+  <div class="result" data-rise="15.2">结果：<em>消息 99+</em>，当场翻车。</div>
+  <div class="stamp" data-stamp="15.6">✗ 错误示范</div>
+  <div class="ft"><span>ZN-01</span><span>请勿模仿</span></div>`;
+
+// ---------- 第二部分 ----------
+html.p5 = `${hd(5)}
+  <div class="part"><div class="k" data-rise="16.75" style="color:var(--green)">PART 2</div><h1 data-rise="16.85">如何做一个<br>好的渣男</h1><div class="s" data-rise="17.2" style="color:var(--green)">（正确示范，请反复学习）</div></div>
+  <svg class="ill" viewBox="0 0 900 900" style="top:900px">
+    <g transform="translate(450 380) scale(9)"><path d="${HEART}" stroke="var(--green)" stroke-width="1.3" data-draw="16.9,17.4" pathLength="1"/></g>
+    <polyline points="370,360 430,420 540,300" stroke="var(--green)" stroke-width="16" data-draw="17.35,17.6" pathLength="1"/>
+  </svg>
+  <div class="ft"><span>ZN-01</span><span>建议背诵</span></div>`;
+
+// 04 只暖一个人
+html.p6 = `${hd(6)}
+  <div class="title"><div class="num good" data-pop="18.15">04</div><div><h2 data-rise="18.2">只暖一个人</h2><p data-rise="18.3">中央空调 → 专属暖手宝</p></div></div>
+  <svg class="ill" viewBox="0 0 900 900">
+    ${[0, 1, 2].map(i => `<circle id="ring${i}" cx="450" cy="600" r="60" stroke="var(--warm)" stroke-width="6" opacity="0"/>`).join('')}
+    <line x1="160" y1="760" x2="740" y2="760" data-draw="18.3,18.6" pathLength="1"/>
+    ${fig({ x: 300, y: 760, s: 1.35, pop: 18.4, blush: true, arms: [[-46, -88], [70, -118]] })}
+    ${fig({ x: 600, y: 760, s: 1.35, pop: 18.5, blush: true, arms: [[-70, -118], [46, -88]] })}
+    <g transform="translate(450 600) scale(2.4)"><g data-pop="18.8" class="c" id="warmer"><path d="${HEART}" fill="var(--red)" stroke="var(--ink)" stroke-width="2"/></g></g>
+    ${[0, 1, 2, 3].map(i => `<g id="fh${i}" transform="translate(450 520)"><path d="${HEART}" fill="none" stroke="var(--red)" stroke-width="3"/></g>`).join('')}
+  </svg>
+  <div class="result good" data-rise="19.5">只给一个人的温度，<em>才叫温暖</em>。</div>
+  <div class="stamp good" data-stamp="19.9">✓ 正确示范</div>
+  <div class="ft"><span>ZN-01</span><span>建议背诵</span></div>`;
+
+// 05 只养一条鱼
+html.p7 = `${hd(7)}
+  <div class="title"><div class="num good" data-pop="20.95">05</div><div><h2 data-rise="21.0">只养一条鱼</h2><p data-rise="21.1">鱼塘 → 一个鱼缸，一条鱼</p></div></div>
+  <svg class="ill" viewBox="0 0 900 900">
+    <defs><clipPath id="bowlClip"><circle cx="400" cy="560" r="164"/></clipPath></defs>
+    <line x1="140" y1="732" x2="820" y2="732" data-draw="21.1,21.4" pathLength="1"/>
+    <rect x="200" y="455" width="400" height="300" fill="var(--water)" stroke="none" clip-path="url(#bowlClip)" data-fade="21.4,21.7"/>
+    <g id="bowlFish" transform="translate(400 580)"><g data-pop="21.6" class="c" id="bowlFishInner">${FISH}</g></g>
+    ${[0, 1, 2].map(i => `<g id="bh${i}" transform="translate(400 560)"><path d="${HEART}" fill="none" stroke="var(--red)" stroke-width="3"/></g>`).join('')}
+    <path d="M311,415 A170,170 0 1 0 489,415" stroke-width="6" data-draw="21.15,21.6" pathLength="1"/>
+    <ellipse cx="400" cy="415" rx="89" ry="14" stroke-width="5" data-draw="21.4,21.6" pathLength="1"/>
+    ${fig({ x: 650, y: 732, s: 1.3, pop: 21.5, blush: true, arms: [[-72, -186], [46, -88]],
+      extra: '<rect class="w" x="-92" y="-214" width="30" height="36" rx="6" transform="rotate(-30 -77 -196)"/>' })}
+    ${[0, 1, 2, 3, 4].map(i => `<circle id="food${i}" r="6" class="ink" opacity="0"/>`).join('')}
+  </svg>
+  <div class="result good" data-rise="22.3">一条就够，<em>好好养</em>。</div>
+  <div class="stamp good" data-stamp="22.7">✓ 正确示范</div>
+  <div class="ft"><span>ZN-01</span><span>建议背诵</span></div>`;
+
+// 06 时间全给一个人
+let cells = '';
+const DAYS = '一二三四五六日';
+for (let c = 0; c < 7; c++) cells += `<text x="${108 + c * 114}" y="110" font-size="34" font-weight="500" text-anchor="middle" fill="#8b8d93" data-fade="23.9,24.1">${DAYS[c]}</text>`;
+for (let r = 0; r < 4; r++) for (let c = 0; c < 7; c++) {
+  const i = r * 7 + c, x = 58 + c * 114, y = 150 + r * 114;
+  cells += `<rect x="${x}" y="${y}" width="100" height="100" rx="18" stroke="#d6d6d2" stroke-width="3" fill="#fff" data-fade="${23.9 + i * 0.006},${24.1 + i * 0.006}"/>
+    <g transform="translate(${x + 50} ${y + 50})"><g data-pop="${24.2 + i * 0.038}" class="c"><rect x="-50" y="-50" width="100" height="100" rx="18" fill="var(--red)" stroke="none"/><g transform="scale(1.3)"><path d="${HEART}" fill="#fff" stroke="none"/></g></g></g>`;
+}
+html.p8 = `${hd(8)}
+  <div class="title"><div class="num good" data-pop="23.75">06</div><div><h2 data-rise="23.8">时间全给一人</h2><p data-rise="23.9">时间管理大师 → 只管和 TA 的时间</p></div></div>
+  <svg class="ill" viewBox="0 0 900 900">${cells}</svg>
+  <div class="result good" data-rise="25.1">每一格，<em>都是 TA</em>。</div>
+  <div class="stamp good" data-stamp="25.5" style="top:1180px">✓ 正确示范</div>
+  <div class="ft"><span>ZN-01</span><span>建议背诵</span></div>`;
+
+// ---------- 结尾 ----------
+html.p9 = `${hd(9)}
+  <svg class="ill" viewBox="0 0 900 900" style="top:180px">
+    <line x1="200" y1="800" x2="700" y2="800" data-draw="26.55,26.85" pathLength="1"/>
+    ${fig({ x: 360, y: 800, s: 1.5, pop: 26.6, blush: true, arms: [[-46, -88], [64, -96]] })}
+    ${fig({ x: 540, y: 800, s: 1.5, pop: 26.7, blush: true, arms: [[-64, -96], [46, -88]] })}
+    <g transform="translate(450 250) scale(4)"><g data-pop="27.0" class="c" id="endHeart"><path d="${HEART}" fill="var(--red)" stroke="none"/></g></g>
+  </svg>
+  <div class="end"><div data-rise="26.85">最好的<span class="zha">渣<span class="strike" id="strike"></span><span class="nuan" id="nuan">暖</span></span>男，</div><div data-rise="27.05">只对一个人好。</div></div>
+  <div class="end-ft" data-rise="28.5"><b>渣男指导手册 · 完</b><br>本手册最终解释权归真心所有</div>
+  <div class="ft"><span>ZN-01</span><span>全书完</span></div>`;
+
+const stage = document.getElementById('stage');
+PAGES.forEach(([id], i) => {
+  const s = document.createElement('section');
+  s.className = 'page'; s.id = id; s.style.zIndex = 100 - i;
+  s.innerHTML = html[id] + '<div class="shade top"></div><div class="shade under"></div>';
+  stage.appendChild(s);
+});
+const fade = document.createElement('div'); fade.id = 'fade'; stage.appendChild(fade);
+
+/* ======================= 工具 ======================= */
+const $ = id => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, p) => a + (b - a) * p;
+const prog = (t, a, b) => clamp((t - a) / (b - a));
+const easeOut = p => 1 - Math.pow(1 - p, 3);
+const easeInOut = p => p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+const easeOutBack = p => { const c1 = 1.9, c3 = c1 + 1; return p <= 0 ? 0 : 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2); };
+const nums = s => s.split(',').map(Number);
+
+const A = {
+  rise: [...document.querySelectorAll('[data-rise]')].map(el => [el, +el.dataset.rise]),
+  pop: [...document.querySelectorAll('[data-pop]')].map(el => [el, +el.dataset.pop]),
+  draw: [...document.querySelectorAll('[data-draw]')].map(el => [el, ...nums(el.dataset.draw)]),
+  fade: [...document.querySelectorAll('[data-fade]')].map(el => [el, ...nums(el.dataset.fade)]),
+  out: [...document.querySelectorAll('[data-out]')].map(el => [el, ...nums(el.dataset.out)]),
+  stamp: [...document.querySelectorAll('[data-stamp]')].map(el => [el, +el.dataset.stamp]),
+  drop: [...document.querySelectorAll('[data-drop]')].map(el => [el, +el.dataset.drop]),
+};
+A.draw.forEach(([el]) => { el.style.strokeDasharray = '1 1'; });
+
+/* ======================= 音效事件 ======================= */
+const EVENTS = [];
+PAGES.slice(0, -1).forEach(([, , end]) => EVENTS.push({ t: end, type: 'flip' }));
+A.stamp.forEach(([el, t]) => EVENTS.push({ t: t + 0.12, type: el.classList.contains('good') ? 'stampGood' : 'stamp' }));
+[6.5, 10.75, 14.6].forEach(t => EVENTS.push({ t, type: 'fail' }));
+[1.15, 1.45, 1.7].forEach(t => EVENTS.push({ t, type: 'pop' }));
+[4.45, 8.65, 12.85, 18.15, 20.95, 23.75].forEach(t => EVENTS.push({ t, type: 'pop' }));
+[4.9, 5.0, 5.1, 5.2, 9.55, 9.63, 9.71, 9.79, 9.87, 13.5, 13.65, 13.8, 13.95, 18.4, 18.5, 18.8, 21.6].forEach(t => EVENTS.push({ t, type: 'blip' }));
+BUBBLES.forEach((b, i) => EVENTS.push({ t: 14.7 + i * 0.07, type: 'ping' }));
+EVENTS.push({ t: 11.42, type: 'splash' });
+for (let i = 0; i < 28; i += 3) EVENTS.push({ t: 24.2 + i * 0.038, type: 'tick' });
+EVENTS.push({ t: 27.8, type: 'scribble' });
+EVENTS.push({ t: 28.1, type: 'end' });
+EVENTS.sort((a, b) => a.t - b.t);
+window.EVENTS = EVENTS;
+
+/* ======================= 渲染 ======================= */
+function render(t) {
+  // 翻页
+  PAGES.forEach(([id, start, end], i) => {
+    const el = $(id);
+    const next = PAGES[i + 1];
+    const visible = t >= start - FLIP - 0.01 && t < end + FLIP;
+    el.style.visibility = visible ? 'visible' : 'hidden';
+    const f = easeInOut(prog(t, end, end + FLIP));
+    el.style.transform = f > 0 ? `rotateY(${-f * 115}deg)` : 'none';
+    el.querySelector('.shade.top').style.opacity = f * 1.2;
+    // 被翻开时，下面一页左侧的阴影
+    const prev = PAGES[i - 1];
+    const u = prev ? prog(t, prev[2], prev[2] + FLIP) : 1;
+    el.querySelector('.shade.under').style.opacity = u > 0 && u < 1 ? Math.sin(u * Math.PI) : 0;
+  });
+
+  // 通用动画
+  for (const [el, a] of A.rise) {
+    const p = easeOut(prog(t, a, a + 0.45));
+    el.style.opacity = p; el.style.transform = `translateY(${(1 - p) * 40}px)`;
+  }
+  for (const [el, a] of A.pop) {
+    const p = prog(t, a, a + 0.42);
+    el.style.opacity = p > 0 ? 1 : 0;
+    if (!el.dataset.custom) el.style.transform = `scale(${easeOutBack(p)})`;
+  }
+  for (const [el, a, b] of A.draw) el.style.strokeDashoffset = 1 - easeInOut(prog(t, a, b));
+  for (const [el, a, b] of A.fade) el.style.opacity = prog(t, a, b);
+  for (const [el, a, b] of A.out) el.style.opacity = 1 - prog(t, a, b);
+  for (const [el, a] of A.stamp) {
+    const p = prog(t, a, a + 0.18);
+    el.style.opacity = p > 0 ? Math.min(1, p * 2) : 0;
+    const rot = el.classList.contains('good') ? -8 : -12;
+    el.style.transform = `rotate(${rot}deg) scale(${lerp(2.6, 1, easeInOut(p)) + (p >= 1 ? 0.04 * Math.exp(-(t - a - .18) * 18) : 0)})`;
+  }
+  for (const [el, a] of A.drop) {
+    const p = prog(t, a, a + 0.35);
+    el.style.opacity = p > 0 ? 1 : 0;
+    el.style.transform = `translateY(${-(1 - easeOutBack(p)) * 160}px)`;
+  }
+  // 盖章时整页轻震
+  PAGES.forEach(([id]) => {
+    const st = $(id).querySelector('[data-stamp]');
+    if (!st) return;
+    const d = t - (+st.dataset.stamp + 0.18);
+    const s = d > 0 && d < 0.25 ? Math.sin(d * 90) * 7 * (1 - d / 0.25) : 0;
+    $(id).querySelectorAll('svg.ill, .title, .result').forEach(e => e.style.translate = `${s}px ${s * .5}px`);
+  });
+
+  /* ----- 01 中央空调 ----- */
+  const waveOn = prog(t, 5.3, 5.6) * (1 - prog(t, 6.55, 6.85));
+  for (let i = 0; i < 4; i++) {
+    const w = $('wave' + i);
+    w.setAttribute('opacity', waveOn);
+    w.style.strokeDasharray = '22 18'; w.style.strokeDashoffset = -t * 90;
+  }
+  const shake = t > 6.5 && t < 7.3 ? (1 - prog(t, 6.5, 7.3)) : 0;
+  $('ac').style.transform = shake ? `translate(${Math.sin(t * 95) * 9 * shake}px, ${Math.cos(t * 77) * 4 * shake}px)` : '';
+  $('acTemp').textContent = t < 6.3 ? '26°' : t < 6.5 ? '38°' : '99°';
+  $('acTemp').style.fill = t >= 6.3 ? 'var(--red)' : '';
+  document.querySelectorAll('#p2 .smoke').forEach((s, i) => {
+    const d = Math.max(0, t - 6.6 - i * 0.12);
+    s.style.translate = `0 ${-d * 60}px`; s.style.opacity = d > 0 ? clamp(1 - d / 1.4) : 0;
+  });
+  document.querySelectorAll('#p2 .hl').forEach((h, i) => {
+    const b = easeOut(prog(t, 6.8 + i * 0.05, 7.1 + i * 0.05));
+    h.style.transform = `translate(${-5 * b}px, ${4 * b}px) rotate(${-18 * b}deg)`;
+    h.nextElementSibling.style.transform = `translate(${5 * b}px, ${4 * b}px) rotate(${18 * b}deg)`;
+    h.style.fill = h.nextElementSibling.style.fill = b > 0.1 ? '#b9bcc2' : 'var(--red)';
+  });
+
+  /* ----- 02 海王 ----- */
+  const conv = easeInOut(prog(t, 10.7, 11.1));
+  FISH_POS.forEach(([x, y], i) => {
+    const bx = x + Math.sin(t * 2.2 + i) * 10, by = y + Math.sin(t * 3 + i * 2) * 6;
+    const fx = lerp(bx, 565 + (i - 2) * 22, conv), fy = lerp(by, 610 + ((i % 2) - .5) * 30, conv);
+    $('fish' + i).setAttribute('transform', `translate(${fx} ${fy}) rotate(${conv * (i - 2) * 25}) scale(${i % 2 ? -0.9 : 0.9} 0.9)`);
+    const l = $('fl' + i);
+    l.setAttribute('x2', fx); l.setAttribute('y2', fy - 16);
+    const tip = TIPS[i];
+    l.setAttribute('x1', lerp(tip[0], 565, conv * .8)); l.setAttribute('y1', lerp(tip[1], 540, conv * .8));
+  });
+  const yank = prog(t, 10.95, 11.4);
+  const yk = yank * yank;
+  const fisher = $('fisher');
+  fisher.dataset.custom = 1;
+  const fp = prog(t, 9.0, 9.42);
+  fisher.style.transformOrigin = '50% 100%';
+  fisher.style.transform = `translate(${yk * 230}px, ${yk * 110}px) rotate(${yk * 80 - Math.sin(Math.PI * clamp(yank * 3)) * 8}deg) scale(${easeOutBack(fp)})`;
+  fisher.style.opacity = fp > 0 ? 1 - prog(t, 11.33, 11.43) : 0;
+  $('rods').style.opacity = 1 - prog(t, 10.9, 11.1);
+  const rp = prog(t, 11.42, 12.4);
+  $('ripple').setAttribute('opacity', rp > 0 ? 1 - rp : 0);
+  $('ripple').setAttribute('rx', 30 + rp * 120); $('ripple').setAttribute('ry', 10 + rp * 30);
+  document.querySelectorAll('#p3 .splash').forEach((s, i) => {
+    const d = Math.max(0, t - 11.42);
+    const dir = [-1, -.4, .4, 1][i];
+    s.style.translate = `${dir * d * 160}px ${-d * 260 + d * d * 500}px`;
+    s.style.opacity = d > 0 ? clamp(1 - d / .7) : 0;
+  });
+
+  /* ----- 03 时间管理大师 ----- */
+  const spin = t < 14.6 ? t * 2 : 14.6 * 2 + (t - 14.6) * 30;
+  $('hand1').setAttribute('transform', `rotate(${spin * 30} 712 104)`);
+  $('hand2').setAttribute('transform', `rotate(${spin * 2.5} 712 104)`);
+  const crash = easeInOut(prog(t, 14.6, 14.95));
+  BLOCKS.forEach((b, i) => {
+    const el = $('blk' + i);
+    const p = easeOutBack(prog(t, 13.5 + i * 0.15, 13.92 + i * 0.15));
+    const dy = (ROWS_Y[1] - ROWS_Y[i] + (i - 1.5) * 16) * crash;
+    const jit = t > 14.95 && t < 15.6 ? Math.sin(t * 70 + i) * 6 * (1 - prog(t, 14.95, 15.6)) : 0;
+    el.style.transformBox = 'fill-box'; el.style.transformOrigin = '50% 50%';
+    el.style.transform = `translate(${(i - 1.5) * 18 * crash + jit}px, ${dy}px) rotate(${(i - 1.5) * 5 * crash}deg) scale(${p})`;
+    el.style.opacity = p > 0 ? 1 : 0;
+  });
+
+  /* ----- 04 暖手宝 ----- */
+  for (let i = 0; i < 3; i++) {
+    const p = ((t - 19.0) / 1.5 + i / 3) % 1;
+    const on = t > 19.0 ? 1 : 0;
+    $('ring' + i).setAttribute('r', 70 + p * 170);
+    $('ring' + i).setAttribute('opacity', on * (1 - p) * 0.8);
+  }
+  const wb = t > 19.2 ? 1 + 0.06 * Math.sin((t - 19.2) * 8) : null;
+  if (wb) { $('warmer').dataset.custom = 1; $('warmer').style.transform = `scale(${wb})`; }
+  for (let i = 0; i < 4; i++) {
+    const p = ((t - 19.2) / 1.6 + i / 4) % 1;
+    const g = $('fh' + i);
+    g.setAttribute('transform', `translate(${450 + Math.sin(p * 6 + i * 2) * 40 + (i - 1.5) * 40} ${520 - p * 360}) scale(${1 + p * .5})`);
+    g.setAttribute('opacity', t > 19.2 ? Math.sin(p * Math.PI) : 0);
+  }
+
+  /* ----- 05 一条鱼 ----- */
+  const sw = t * 1.5;
+  const fx = 400 + Math.sin(sw) * 80, fy = 590 + Math.sin(sw * 2) * 22;
+  const face = Math.cos(sw) > 0 ? -1 : 1; // 向右游时翻转
+  $('bowlFish').setAttribute('transform', `translate(${fx} ${fy}) scale(${face * 0.95} 0.95)`);
+  for (let i = 0; i < 3; i++) {
+    const p = ((t - 21.9) / 1.4 + i / 3) % 1;
+    const g = $('bh' + i);
+    g.setAttribute('transform', `translate(${fx - face * 40 + Math.sin(p * 8) * 8} ${fy - 30 - p * 130}) scale(${0.6 + p * .3})`);
+    g.setAttribute('opacity', t > 21.9 ? Math.sin(p * Math.PI) : 0);
+  }
+  for (let i = 0; i < 5; i++) {
+    const d = t - 22.0 - i * 0.12;
+    const f = $('food' + i);
+    const k = clamp(d / 0.55);
+    f.setAttribute('cx', lerp(548, 455 + i * 12, k));
+    f.setAttribute('cy', 470 - 40 * Math.sin(k * Math.PI) + k * 80);
+    f.setAttribute('opacity', d > 0 && d < 1.1 ? 1 - clamp((d - 0.8) / 0.3) : 0);
+  }
+
+  /* ----- 结尾 ----- */
+  if (t > 27.4) { $('endHeart').dataset.custom = 1; $('endHeart').style.transform = `scale(${1 + 0.07 * Math.max(0, Math.sin((t - 27.4) * 7))})`; }
+  $('strike').style.transform = `scaleX(${easeInOut(prog(t, 27.8, 28.05))}) rotate(-8deg)`;
+  const np = prog(t, 28.1, 28.5);
+  $('nuan').style.opacity = np > 0 ? 1 : 0;
+  $('nuan').style.transform = `translateX(-50%) rotate(-8deg) scale(${easeOutBack(np)})`;
+  fade.style.opacity = easeInOut(prog(t, 29.35, 30));
+}
+window.render = render;
+window.DURATION = 30;
+
+/* ======================= 浏览器预览 ======================= */
+if (!navigator.webdriver) {
+  let t0 = performance.now(), paused = false, cur = 0;
+  const fit = () => { const s = Math.min(innerWidth / 1080, innerHeight / 1920);
+    stage.style.transform = `scale(${s})`; stage.style.transformOrigin = '0 0'; };
+  addEventListener('resize', fit); fit();
+  addEventListener('keydown', e => {
+    if (e.code === 'Space') { paused = !paused; t0 = performance.now() - cur * 1000; }
+    if (e.code === 'ArrowRight') { cur = Math.min(30, cur + 1); t0 = performance.now() - cur * 1000; }
+    if (e.code === 'ArrowLeft') { cur = Math.max(0, cur - 1); t0 = performance.now() - cur * 1000; }
+  });
+  const loop = () => { if (!paused) cur = ((performance.now() - t0) / 1000) % 30; render(cur); requestAnimationFrame(loop); };
+  document.fonts.ready.then(loop);
+} else {
+  render(0);
+}
+</script>
+</body>
+</html>
