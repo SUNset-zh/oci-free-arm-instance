@@ -24,8 +24,10 @@ POST = dict(exposure_keys=[[1, .45], [173, .4]], h_dens=1.2e-5, h_base=4500, h_s
             shadow_tint=(.92, .97, 1.08), high_tint=(1.08, 1.0, .88),
             clouds=dict(alt=9500, cover=.3, scale=7000, stretch=3.0, wind=(60, 25), thick=2.2, amb=.9, bright=.45,
                         sun_gain=1.0, shade=3.0, far=140000),
-            cloudsea=dict(base=5150, a1=220, s1=9000, a2=260, s2=2400, wind=(45, 18), mist=160, sun_gain=.9, sun_k=1.0,
-                          amb=.9, amb_rgb=(.07, .09, .13), silver=1.0, wrap=.5, soft=1.2))
+            # 云海：平缓的海面（base 是海面高度）上成簇的积云团，见 post/cloudsea.py
+            cloudsea=dict(base=5060, a1=220, s1=9000, a2=170, s2=1000, a3=26, s3=170, warp=.5, cover=.6, a4=35, s4=2800,
+                          wind=(45, 18), mist=160, sun_gain=.8, sun_k=1.0, amb=1.6, amb_rgb=(.06, .09, .16), ms=.3,
+                          silver=1.0, wrap=.5, soft=1.2, soft_near=4.0))
 
 
 def main():
