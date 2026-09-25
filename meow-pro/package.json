@@ -1,0 +1,13 @@
+{
+  "name": "meow-pro-keynote",
+  "version": "1.0.0",
+  "private": true,
+  "description": "喵 Pro — a 50 s keynote-style launch film for a kitten, rendered from HTML with headless Chromium.",
+  "scripts": {
+    "build": "./build.sh",
+    "preview": "PREVIEW=1 ./build.sh"
+  },
+  "devDependencies": {
+    "playwright": "^1.56.1"
+  }
+}

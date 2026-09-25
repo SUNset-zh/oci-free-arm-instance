@@ -1,0 +1,55 @@
+@font-face { font-family: "Inter"; src: url(fonts/Inter-VF.ttf) format("truetype"); font-weight: 100 900; font-display: block; }
+@font-face { font-family: "NotoSC"; src: url(fonts/NotoSansSC-VF.ttf) format("truetype"); font-weight: 100 900; font-display: block; }
+
+:root {
+  --ink: #f5f5f7;
+  --ink2: #a1a1a6;
+  --ink3: #86868b;
+  --dark-ink: #1d1d1f;
+  --dark-ink2: #6e6e73;
+  --tile: #161617;
+  --amber: #ffc98b;
+  --pink: #ff9fb0;
+  --cream: #ffe3d3;
+  --green: #30d158;
+  --yellow: #ffd60a;
+  --orange: #ff9f0a;
+  --blue: #2997ff;
+  --indigo: #5e5ce6;
+  --grad: linear-gradient(96deg, #ffcb8e 0%, #ffa9a0 42%, #ff9fb4 64%, #ffe1d2 100%);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: #000; }
+body { width: 1080px; height: 1920px; overflow: hidden; }
+
+#stage {
+  position: relative; width: 1080px; height: 1920px; overflow: hidden; background: #000;
+  font-family: "Inter", "NotoSC", sans-serif; color: var(--ink);
+  -webkit-font-smoothing: antialiased; text-rendering: geometricPrecision;
+  font-kerning: normal;
+}
+
+.scene { position: absolute; inset: 0; display: none; overflow: hidden; }
+.abs { position: absolute; left: 0; top: 0; }
+.fill { position: absolute; inset: 0; }
+img.nat { position: absolute; left: 0; top: 0; transform-origin: 0 0; max-width: none; user-select: none; }
+
+/* typography */
+.t { position: absolute; left: 0; width: 1080px; text-align: center; white-space: nowrap; line-height: 1.12; }
+.h1 { font-weight: 700; font-size: 92px; letter-spacing: -0.01em; }
+.h2 { font-weight: 700; font-size: 64px; letter-spacing: -0.005em; }
+.sub { font-weight: 500; font-size: 40px; color: var(--ink2); letter-spacing: 0.01em; }
+.cap { font-weight: 500; font-size: 30px; color: var(--ink3); letter-spacing: 0.04em; }
+.grad { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.ch { display: inline-block; will-change: transform, opacity; }
+
+/* dark tiles (bento) */
+.tile { position: absolute; background: var(--tile); border-radius: 36px; overflow: hidden; }
+.tile .lbl { position: absolute; left: 34px; bottom: 30px; text-align: left; line-height: 1.15; }
+.tile .lbl b { display: block; font-size: 38px; font-weight: 700; color: var(--ink); }
+.tile .lbl span { display: block; font-size: 26px; font-weight: 500; color: var(--ink3); margin-top: 6px; }
+
+svg { overflow: visible; }
+
+#debug { position: absolute; right: 16px; top: 12px; z-index: 999; font: 600 28px/1 Inter; color: #0f0; text-shadow: 0 0 4px #000; }

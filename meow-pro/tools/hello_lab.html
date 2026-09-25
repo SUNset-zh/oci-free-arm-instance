@@ -1,0 +1,26 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+html,body{margin:0;background:#000}
+svg{position:absolute;left:0;top:0}
+text{font:14px monospace;fill:#6cf}
+</style></head>
+<body>
+<svg id="s" width="1080" height="1920" viewBox="0 0 1080 1920"></svg>
+<script src="../web/hello_path.js"></script>
+<script>
+const s = document.getElementById('s');
+const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+g.setAttribute('transform', 'translate(40,700)');
+s.appendChild(g);
+const d = HELLO.path();
+g.innerHTML = `
+<defs><linearGradient id="gr" x1="0" x2="1" gradientUnits="objectBoundingBox">
+<stop offset="0" stop-color="#FFC98B"/><stop offset=".55" stop-color="#FF9FB0"/><stop offset="1" stop-color="#FFE3D3"/></linearGradient></defs>
+<path d="${d}" fill="none" stroke="url(#gr)" stroke-width="19" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="${d}" fill="none" stroke="#fff" stroke-opacity=".25" stroke-width="1.5"/>
+` + (location.hash === '#pts' ? HELLO.strokes.flat().map((p, i) => `<circle cx="${p[0]}" cy="${p[1]}" r="3" fill="#0ff"/><text x="${p[0] + 5}" y="${p[1] - 5}">${i}</text>`).join('') : '');
+window.__ready = Promise.resolve();
+window.seek = () => {};
+</script>
+</body></html>

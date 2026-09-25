@@ -1,0 +1,8 @@
+numpy
+scipy
+pillow
+pyloudnorm
+# asset preparation only (tools/prepare_assets.py, tools/segment.py, tools/esrgan_onnx.py)
+onnxruntime
+onnx
+rembg
