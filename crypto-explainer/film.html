@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>币圈黑话翻译器</title>
+<!--
+  60 秒竖屏科普短片（1080x1920）：区块链 / 比特币 / 链上 / 私钥与助记词 / 冷热钱包 / 智能合约 / 合约交易 / 币安·BNB·Gas。
+  顶部进度条本身是一条区块链：每讲完一个概念，就“挖出”一个新区块。
+  画面由 render(t) 确定性绘制，render.js 逐帧截图编码。浏览器打开可预览（空格暂停，← → 跳转）。
+-->
+<style>
+  :root { --bg: #0a0d14; --panel: #121826; --line: #243049; --text: #e8ecf4; --muted: #7d8699; --c: #3ddcc4; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: #000; overflow: hidden; }
+  body { font-family: "Noto Sans SC", "Inter", sans-serif; color: var(--text); -webkit-font-smoothing: antialiased; }
+  #stage { position: relative; width: 1080px; height: 1920px; overflow: hidden; background: var(--bg);
+           background-image: radial-gradient(circle, #1a2233 1.5px, transparent 2px); background-size: 44px 44px; }
+  #glow { position: absolute; left: 0; right: 0; top: 200px; height: 1000px; pointer-events: none; }
+
+  .hd { position: absolute; left: 70px; right: 70px; top: 70px; display: flex; justify-content: space-between; align-items: baseline; }
+  .hd .name { font: 700 36px/1 "Noto Sans SC"; }
+  .hd .name small { font: 500 22px/1 "JetBrains Mono"; color: var(--muted); margin-left: 10px; }
+  .hd .blk { font: 700 26px/1 "JetBrains Mono"; color: var(--c); letter-spacing: 2px; }
+  svg#chain { position: absolute; left: 0; top: 130px; width: 1080px; height: 140px; overflow: visible; }
+
+  .scene { position: absolute; inset: 0; visibility: hidden; --c: #3ddcc4; }
+  svg.ill { position: absolute; left: 90px; top: 290px; width: 900px; height: 780px; overflow: visible;
+            fill: none; stroke: var(--text); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+  svg.ill text { fill: var(--text); stroke: none; font-family: "Noto Sans SC", "Inter"; }
+  svg.ill .mono { font-family: "JetBrains Mono"; }
+  svg.ill .muted { fill: var(--muted); }
+  svg.ill .cc { fill: var(--c); }
+  svg.ill .pn { fill: var(--panel); }
+  svg [data-pop] { transform-box: fill-box; transform-origin: 50% 50%; }
+
+  .tx { position: absolute; left: 70px; right: 70px; top: 1100px; }
+  .lbl { font: 700 26px/1 "JetBrains Mono"; color: var(--c); letter-spacing: 3px; }
+  .term { font: 700 92px/1.1 "Noto Sans SC"; margin-top: 22px; color: #fff; letter-spacing: -1px; white-space: nowrap; }
+  .term .en { font: 500 32px/1 "JetBrains Mono"; color: var(--c); margin-left: 18px; letter-spacing: 0; }
+  .tr { margin-top: 28px; font: 400 42px/1.55 "Noto Sans SC"; color: #d5dae6; }
+  .tr .k { display: block; font: 700 24px/1 "JetBrains Mono"; color: var(--muted); letter-spacing: 3px; margin-bottom: 14px; }
+  .tr b { color: var(--c); font-weight: 700; }
+  .tr .gl { font-family: "JetBrains Mono"; color: var(--c); opacity: .75; }
+  .tip { position: absolute; left: 260px; right: 70px; top: 1540px; padding: 26px 32px 28px; border-radius: 28px;
+         background: #131a29; border: 2px solid var(--line); }
+  .tip::before { content: ""; position: absolute; left: -16px; top: 56px; width: 28px; height: 28px; background: #131a29;
+                 border-left: 2px solid var(--line); border-bottom: 2px solid var(--line); transform: rotate(45deg); }
+  .tip .k { font: 700 22px/1 "JetBrains Mono"; color: var(--c); letter-spacing: 3px; }
+  .tip .v { font: 500 36px/1.45 "Noto Sans SC"; color: #fff; margin-top: 12px; }
+  svg#mascot { position: absolute; left: 70px; top: 1540px; width: 170px; height: 170px; overflow: visible; }
+  .ft { position: absolute; left: 70px; right: 70px; bottom: 58px; text-align: center; font: 400 24px/1 "Noto Sans SC"; color: #5d6679; letter-spacing: 1px; }
+  #scan { position: absolute; left: 0; right: 0; height: 4px; background: var(--sc, #3ddcc4); box-shadow: 0 0 24px 6px var(--sc, #3ddcc4); opacity: 0; pointer-events: none; }
+  #fade { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="glow"></div>
+  <div class="hd"><span class="name">黑话翻译器<small>v1.0</small></span><span class="blk" id="blkLabel">BLOCK #00</span></div>
+  <svg id="chain" viewBox="0 0 1080 140"></svg>
+  <div id="scenes"></div>
+  <svg id="mascot" viewBox="-85 -85 170 170">
+    <ellipse cx="0" cy="68" rx="46" ry="8" fill="#000" opacity=".35"/>
+    <g id="mBody">
+      <rect x="-30" y="44" width="20" height="18" rx="7" fill="#0a0d14"/><rect x="10" y="44" width="20" height="18" rx="7" fill="#0a0d14"/>
+      <rect id="mFill" x="-56" y="-52" width="112" height="104" rx="28" fill="#3ddcc4"/>
+      <rect x="-42" y="-42" width="44" height="12" rx="6" fill="#fff" opacity=".35"/>
+      <g id="mEyes">
+        <circle id="me1" cx="-21" cy="-4" r="14" fill="#fff"/><circle id="me2" cx="21" cy="-4" r="14" fill="#fff"/>
+        <circle id="mp1" cx="-19" cy="-3" r="6.5" fill="#0a0d14"/><circle id="mp2" cx="23" cy="-3" r="6.5" fill="#0a0d14"/>
+      </g>
+      <path id="mBrow" d="" stroke="#0a0d14" stroke-width="5" stroke-linecap="round" fill="none"/>
+      <path id="mMouth" d="M-14,22 Q0,34 14,22" stroke="#0a0d14" stroke-width="5" stroke-linecap="round" fill="none"/>
+    </g>
+  </svg>
+  <div class="ft">仅作知识科普 · 不构成投资建议 · 请遵守当地法律法规</div>
+  <div id="scan"></div>
+  <div id="fade"></div>
+</div>
+
+<script>
+/* ======================= 时间表 ======================= */
+const SC = [
+  ['s0', 0, 3.2, '#3ddcc4'], ['s1', 3.2, 9.5, '#3ddcc4'], ['s2', 9.5, 14.5, '#f7931a'], ['s3', 14.5, 20.8, '#4c9bff'],
+  ['s4', 20.8, 27.1, '#ffb547'], ['s5', 27.1, 33.4, '#ff8a5b'], ['s6', 33.4, 39.4, '#9b87ff'], ['s7', 39.4, 45.7, '#ff4d5e'],
+  ['s8', 45.7, 52.2, '#f0b90b'], ['s9', 52.2, 60, '#3ddcc4'],
+];
+const DURATION = 60;
+const T = (k, r) => +(SC[k][1] + r).toFixed(3);
+
+/* ======================= 小工具 ======================= */
+const HEX = '0123456789abcdef';
+let seed = 7; const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+const hash4 = () => Array.from({ length: 4 }, () => HEX[Math.floor(rnd() * 16)]).join('');
+function gear(r, n) {
+  const p = [];
+  for (let i = 0; i < n * 2; i++) {
+    const a0 = i / (n * 2) * Math.PI * 2, a1 = (i + 1) / (n * 2) * Math.PI * 2, rr = i % 2 ? r - 12 : r;
+    p.push(`${(Math.cos(a0) * rr).toFixed(1)},${(Math.sin(a0) * rr).toFixed(1)}`, `${(Math.cos(a1) * rr).toFixed(1)},${(Math.sin(a1) * rr).toFixed(1)}`);
+  }
+  return 'M' + p.join(' L') + 'Z';
+}
+const coin = (label, fill = 'var(--c)', r = 26, fs = 24) => `<circle r="${r}" fill="${fill}" stroke="none"/><circle r="${r - 6}" stroke="rgba(255,255,255,.4)" stroke-width="2.5"/><text y="${fs * .36}" font-size="${fs}" font-weight="700" text-anchor="middle" style="fill:#fff">${label}</text>`;
+const KEY = '<circle cx="-34" cy="0" r="22" stroke-width="7"/><line x1="-12" y1="0" x2="48" y2="0" stroke-width="7"/><line x1="36" y1="0" x2="36" y2="16" stroke-width="7"/><line x1="22" y1="0" x2="22" y2="12" stroke-width="7"/>';
+const CHECK = (x, y, t, r = 20, col = '#2fbf71') => `<g transform="translate(${x} ${y})"><g data-pop="${t}"><circle r="${r}" fill="${col}" stroke="none"/><path d="M${-r * .45},0 l${r * .3},${r * .32} ${r * .55},${-r * .62}" stroke="#fff" stroke-width="4.5"/></g></g>`;
+const CROSS = (x, y, t, r = 18) => `<g transform="translate(${x} ${y})"><g data-pop="${t}"><circle r="${r}" fill="#ff4d5e" stroke="none"/><path d="M${-r * .38},${-r * .38} L${r * .38},${r * .38} M${r * .38},${-r * .38} L${-r * .38},${r * .38}" stroke="#fff" stroke-width="4"/></g></g>`;
+
+function textBlock(k, lbl, term, en, trans, tip) {
+  const s = SC[k][1];
+  return `<div class="tx">
+      <div class="lbl" data-rise="${s + .15}">${lbl}</div>
+      <div class="term" data-rise="${s + .25}">${term}${en ? `<span class="en">${en}</span>` : ''}</div>
+      <div class="tr"><span class="k" data-rise="${s + .45}">翻译 →</span><span data-decode="${s + .6}">${trans}</span></div>
+    </div>
+    <div class="tip" data-rise="${s + 1.9}"><div class="k">一句话记住</div><div class="v">${tip}</div></div>`;
+}
+
+/* ======================= 各场景 ======================= */
+const H = {};
+
+// 0 开场
+const JARGON = [['区块链', 60, 80], ['上链', 520, 40], ['私钥', 250, 190], ['助记词', 600, 210], ['冷钱包', 40, 330], ['Gas', 420, 340],
+  ['智能合约', 610, 420], ['合约', 150, 480], ['BNB', 420, 540], ['挖矿', 660, 620], ['杠杆', 60, 640], ['热钱包', 330, 700]];
+H.s0 = `<svg class="ill" viewBox="0 0 900 780">
+    ${JARGON.map(([w, x, y], i) => `<g class="jg" data-x="${x}" data-y="${y}" data-i="${i}"><g data-pop="${.15 + i * .1}">
+      <rect x="0" y="0" width="${w.length * 40 + 60}" height="80" rx="40" class="pn" stroke="${i % 3 === 0 ? 'var(--c)' : '#34405a'}" stroke-width="3"/>
+      <text x="${(w.length * 40 + 60) / 2}" y="54" font-size="38" font-weight="700" text-anchor="middle">${w}</text></g></g>`).join('')}
+  </svg>
+  ${textBlock(0, 'LOADING…', '币圈黑话，听不懂？', '', '别慌，*1 分钟*帮你翻译 *8 个*关键词。', '从最底层的「区块链」说起。')}`;
+
+// 1 区块链
+const TXS = [['A→B 2', 'C→D 5', 'E→F 1'], ['G→H 3', 'C→D 5', 'I→J 8'], ['K→L 1', 'M→N 4', 'O→P 6'], ['Q→R 7', 'S→T 2', 'U→V 9']];
+const NODES = [[90, 560], [220, 640], [360, 690], [540, 690], [680, 640], [810, 560]];
+H.s1 = `<svg class="ill" viewBox="0 0 900 780">
+    ${NODES.map(([x, y], i) => `<line x1="${x}" y1="${y}" x2="${[115, 115, 335, 555, 775, 775][i]}" y2="290" stroke="#2a3346" stroke-width="2.5" stroke-dasharray="6 8" data-fade="${T(1, 1.3 + i * .06)},${T(1, 1.6 + i * .06)}"/>`).join('')}
+    ${[0, 1, 2].map(i => `<g id="lk${i}"><rect x="${200 + i * 220 - 8}" y="181" width="30" height="18" rx="9" stroke="var(--c)" stroke-width="4" data-fade="${T(1, .6 + i * .2)},${T(1, .8 + i * .2)}"/><rect x="${200 + i * 220 + 14}" y="181" width="30" height="18" rx="9" stroke="var(--c)" stroke-width="4" data-fade="${T(1, .6 + i * .2)},${T(1, .8 + i * .2)}"/></g>`).join('')}
+    ${TXS.map((tx, i) => `<g transform="translate(${30 + i * 220} 90)"><g data-pop="${T(1, .3 + i * .2)}">
+      <rect width="170" height="200" rx="18" class="pn" stroke="var(--c)"/>
+      ${i === 1 ? `<rect width="170" height="200" rx="18" stroke="#ff4d5e" stroke-width="6" data-fade="${T(1, 3.0)},${T(1, 3.15)}"/>` : ''}
+      <text x="16" y="38" class="mono cc" font-size="24" font-weight="700">#10${i}</text>
+      <line x1="16" y1="54" x2="154" y2="54" stroke="#2a3346" stroke-width="2"/>
+      ${tx.map((s, j) => (i === 1 && j === 1)
+        ? `<text x="16" y="${92 + j * 34}" class="mono" font-size="22" data-out="${T(1, 3.0)},${T(1, 3.1)}">${s}</text><text x="16" y="${92 + j * 34}" class="mono" font-size="22" style="fill:#ff4d5e" font-weight="700" data-fade="${T(1, 3.0)},${T(1, 3.1)}">C→D 500</text>`
+        : `<text x="16" y="${92 + j * 34}" class="mono" font-size="22">${s}</text>`).join('')}
+      <text x="16" y="186" class="mono muted" font-size="16">hash ${hash4()}…</text>
+    </g></g>`).join('')}
+    ${NODES.map(([x, y], i) => `<g transform="translate(${x} ${y})"><g data-pop="${T(1, 1.3 + i * .06)}"><circle r="36" class="pn" stroke="#5d6679" stroke-width="3"/>
+      <rect x="-14" y="-16" width="28" height="32" rx="4" stroke="#a9b1c3" stroke-width="3"/><line x1="-7" y1="-6" x2="7" y2="-6" stroke="#a9b1c3" stroke-width="2.5"/><line x1="-7" y1="3" x2="7" y2="3" stroke="#a9b1c3" stroke-width="2.5"/></g></g>`).join('')}
+    ${NODES.map(([x, y], i) => CROSS(x + 26, y - 26, T(1, 3.55 + i * .08))).join('')}
+    <text x="450" y="770" font-size="28" text-anchor="middle" class="muted" data-fade="${T(1, 1.6)},${T(1, 1.9)}">全网节点：人手一本账</text>
+    <g transform="translate(450 440)"><g data-pop="${T(1, 4.2)}"><rect x="-150" y="-44" width="300" height="88" rx="44" fill="#ff4d5e" stroke="none"/><text y="16" font-size="44" font-weight="700" text-anchor="middle" style="fill:#fff">篡改失败！</text></g></g>
+    <g id="cursor"><path d="M0,0 L0,44 L12,33 L21,52 L29,48 L20,30 L36,30Z" fill="#fff" stroke="#0a0d14" stroke-width="3"/></g>
+  </svg>
+  ${textBlock(1, '黑话 #01', '区块链', 'Blockchain', '一本*全网一起记*、谁都*改不了*的公开账本。', '改一页，全网都会发现。')}`;
+
+// 2 比特币
+H.s2 = `<svg class="ill" viewBox="0 0 900 780">
+    <defs><radialGradient id="btcG" cx="35%" cy="30%" r="80%"><stop offset="0" stop-color="#ffc062"/><stop offset=".6" stop-color="#f7931a"/><stop offset="1" stop-color="#c46d05"/></radialGradient></defs>
+    <g transform="translate(450 260)"><g data-pop="${T(2, .2)}"><g id="btc">
+      <circle r="175" fill="url(#btcG)" stroke="none"/><circle r="148" stroke="rgba(255,255,255,.35)" stroke-width="5"/>
+      <g transform="rotate(14)"><text y="70" font-size="200" font-weight="700" font-family="Inter" text-anchor="middle" style="fill:#fff">B</text>
+        <g stroke="#fff" stroke-width="16"><line x1="-18" y1="-104" x2="-18" y2="-76"/><line x1="18" y1="-104" x2="18" y2="-76"/><line x1="-18" y1="76" x2="-18" y2="104"/><line x1="18" y1="76" x2="18" y2="104"/></g></g>
+    </g></g></g>
+    <text x="80" y="515" font-size="28" class="muted" data-fade="${T(2, .9)},${T(2, 1.1)}">总量上限</text>
+    <text x="820" y="515" font-size="30" class="mono cc" font-weight="700" text-anchor="end" data-fade="${T(2, .9)},${T(2, 1.1)}">21,000,000 枚</text>
+    <rect x="80" y="535" width="740" height="44" rx="22" class="pn" stroke="#2a3346" data-fade="${T(2, .9)},${T(2, 1.1)}"/>
+    <rect id="supply" x="84" y="539" width="0" height="36" rx="18" fill="var(--c)" stroke="none"/>
+    <line x1="820" y1="522" x2="820" y2="592" stroke="#fff" stroke-width="4" stroke-dasharray="6 6" data-fade="${T(2, .9)},${T(2, 1.1)}"/>
+    <text x="80" y="625" font-size="24" class="muted" data-fade="${T(2, 2.0)},${T(2, 2.3)}">已挖出约 95%，永远不会超过上限</text>
+    <g transform="translate(150 712)"><g id="pick" data-pop="${T(2, 1.4)}"><line x1="0" y1="0" x2="40" y2="-40" stroke="#c9a27a" stroke-width="8"/><path d="M14,-62 Q52,-58 66,-20" stroke="#cfd5e2" stroke-width="9"/></g></g>
+    <g transform="translate(240 712)"><g data-pop="${T(2, 1.5)}"><rect x="-32" y="-32" width="64" height="64" rx="12" class="pn" stroke="var(--c)"/><text y="10" font-size="22" class="mono cc" text-anchor="middle">#</text></g></g>
+    <path d="M300,712 L360,712 M346,700 L360,712 346,724" stroke="#5d6679" data-fade="${T(2, 1.6)},${T(2, 1.8)}"/>
+    <g transform="translate(410 712)"><g data-pop="${T(2, 1.9)}">${coin('+1', 'var(--c)', 30, 22)}</g></g>
+    <text x="470" y="722" font-size="30" font-weight="700" data-fade="${T(2, 1.9)},${T(2, 2.1)}">矿工记账 → 新币奖励</text>
+  </svg>
+  ${textBlock(2, '黑话 #02', '比特币', 'BTC', '区块链上的*第一种数字货币*，总量上限 *2100 万枚*。', '帮全网记账（挖矿）的人，拿新币当奖励。')}`;
+
+// 3 链上 vs 链下
+H.s3 = `<svg class="ill" viewBox="0 0 900 780">
+    <text x="30" y="46" font-size="30" font-weight="700" class="cc" data-fade="${T(3, .3)},${T(3, .5)}">链上 · 公开账本</text>
+    ${[0, 1, 2, 3, 4].map(i => `<g transform="translate(${30 + i * 172} 80)"><g data-pop="${T(3, .3 + i * .08)}"><rect width="124" height="92" rx="14" class="pn" stroke="#34405a" stroke-width="3"/>
+      ${i === 3 ? `<rect width="124" height="92" rx="14" fill="rgba(76,155,255,.25)" stroke="var(--c)" stroke-width="5" data-fade="${T(3, 2.5)},${T(3, 2.7)}"/><text x="62" y="57" font-size="24" font-weight="700" text-anchor="middle" class="cc" data-fade="${T(3, 2.55)},${T(3, 2.75)}">✓ 上链</text>` : `<text x="62" y="56" class="mono muted" font-size="20" text-anchor="middle">#${200 + i}</text>`}</g></g>
+      ${i < 4 ? `<line x1="${154 + i * 172}" y1="126" x2="${202 + i * 172}" y2="126" stroke="#34405a" stroke-width="4" data-fade="${T(3, .5)},${T(3, .7)}"/>` : ''}`).join('')}
+    <g id="mag"><circle cx="0" cy="0" r="30" stroke="#fff" stroke-width="6"/><line x1="22" y1="22" x2="46" y2="46" stroke="#fff" stroke-width="9"/></g>
+    <text x="870" y="220" font-size="24" class="muted" text-anchor="end" data-fade="${T(3, .9)},${T(3, 1.1)}">任何人都能查</text>
+    <g data-pop="${T(3, .9)}">
+      <path d="M40,388 L210,318 L380,388Z" class="pn" stroke="#a9b1c3" stroke-width="4"/>
+      <rect x="60" y="388" width="300" height="236" rx="10" class="pn" stroke="#a9b1c3" stroke-width="4"/>
+      <text x="210" y="434" font-size="24" class="muted" text-anchor="middle">内部账本</text>
+      <text id="ledger0" x="84" y="486" class="mono" font-size="24"></text>
+      <text id="ledger1" x="84" y="530" class="mono" font-size="24"></text>
+      <text id="ledger2" x="84" y="574" class="mono" font-size="24"></text>
+    </g>
+    <text x="210" y="672" font-size="28" font-weight="700" text-anchor="middle" data-fade="${T(3, 1.0)},${T(3, 1.2)}">中心化交易所（如币安）</text>
+    <g data-pop="${T(3, 1.1)}"><rect x="570" y="430" width="270" height="176" rx="28" class="pn" stroke="#a9b1c3" stroke-width="4"/>
+      <path d="M570,480 L840,480" stroke="#a9b1c3" stroke-width="4"/><rect x="760" y="506" width="80" height="54" rx="14" stroke="#a9b1c3" stroke-width="4"/><circle cx="790" cy="533" r="8" fill="#a9b1c3" stroke="none"/></g>
+    <text x="705" y="672" font-size="28" font-weight="700" text-anchor="middle" data-fade="${T(3, 1.2)},${T(3, 1.4)}">你自己的钱包</text>
+    <path d="M380,460 C450,300 560,240 646,180 M646,180 C700,280 710,360 705,425" stroke="var(--c)" stroke-width="4" stroke-dasharray="4 12" pathLength="1" data-fade="${T(3, 1.6)},${T(3, 1.9)}"/>
+    <text x="470" y="360" font-size="28" font-weight="700" class="cc" data-fade="${T(3, 1.7)},${T(3, 1.9)}">提币</text>
+    <g id="wcoin" opacity="0">${coin('B', 'var(--c)', 24, 24)}</g>
+  </svg>
+  ${textBlock(3, '黑话 #03', '链上', 'On-chain', '写进区块链的记录：*公开可查*、*无法篡改*。', '在交易所里买卖，是它内部记账；提币到钱包，才算上链。')}`;
+
+// 4 私钥 & 助记词
+const WORDS = ['ri', 'ca', 'or', 'ma', 'sl', 'bu', 'te', 'fo', 'ze', 'ho', 'pa', 'wi'];
+H.s4 = `<svg class="ill" viewBox="0 0 900 780">
+    <g data-pop="${T(4, .2)}"><rect x="40" y="70" width="280" height="180" rx="28" class="pn" stroke="#a9b1c3" stroke-width="4"/><rect x="236" y="130" width="84" height="58" rx="14" stroke="#a9b1c3" stroke-width="4"/><circle cx="266" cy="159" r="8" fill="#a9b1c3" stroke="none"/></g>
+    <text x="180" y="40" font-size="26" class="muted" text-anchor="middle" data-fade="${T(4, .3)},${T(4, .5)}">钱包</text>
+    <g id="key" opacity="0"><g stroke="var(--c)">${KEY}</g></g>
+    <text x="640" y="250" font-size="26" class="mono cc" text-anchor="middle" data-fade="${T(4, 1.1)},${T(4, 1.3)}">私钥 5Kb8…x9Qe</text>
+    <text x="40" y="318" font-size="28" font-weight="700" class="cc" data-fade="${T(4, 1.3)},${T(4, 1.5)}">助记词 · 12 个单词 = 私钥的备份</text>
+    ${WORDS.map((w, i) => { const c = i % 4, r = Math.floor(i / 4); return `<g transform="translate(${40 + c * 212} ${344 + r * 80})"><g data-pop="${T(4, 1.4 + i * .06)}"><rect width="192" height="64" rx="14" class="pn" stroke="#34405a" stroke-width="3"/><text x="18" y="42" class="mono muted" font-size="22">${i + 1}</text><text x="58" y="43" class="mono" font-size="26" font-weight="700">${w}•••</text></g></g>`; }).join('')}
+    <g data-pop="${T(4, 3.0)}">
+      <circle cx="74" cy="660" r="38" fill="#34405a" stroke="none"/><text x="74" y="671" font-size="30" font-weight="700" text-anchor="middle">客</text>
+      <text x="130" y="612" font-size="22" class="muted">“官方客服”</text>
+      <rect x="130" y="626" width="600" height="84" rx="26" class="pn" stroke="#34405a" stroke-width="3"/>
+      <text x="160" y="680" font-size="32">您好，请提供助记词完成验证～</text>
+    </g>
+    <g transform="translate(720 640) rotate(-12)"><g data-pop="${T(4, 3.7)}"><rect x="-120" y="-50" width="240" height="100" rx="18" fill="rgba(255,77,94,.15)" stroke="#ff4d5e" stroke-width="8"/><text y="18" font-size="50" font-weight="700" text-anchor="middle" style="fill:#ff4d5e">是骗子！</text></g></g>
+  </svg>
+  ${textBlock(4, '黑话 #04', '私钥 & 助记词', 'Private Key', '钱包里装的不是币，是*钥匙*；助记词就是*钥匙的备份*。', '助记词只抄在纸上，谁要都不给（包括“客服”）。')}`;
+
+// 5 冷热钱包
+const BUG = '<circle r="26" fill="#ff4d5e" stroke="none"/><g stroke="#ff4d5e" stroke-width="4"><line x1="-20" y1="-10" x2="-38" y2="-20"/><line x1="-22" y1="6" x2="-40" y2="8"/><line x1="-18" y1="18" x2="-32" y2="32"/><line x1="20" y1="-10" x2="38" y2="-20"/><line x1="22" y1="6" x2="40" y2="8"/><line x1="18" y1="18" x2="32" y2="32"/></g><circle cx="-9" cy="-6" r="6" fill="#fff" stroke="none"/><circle cx="9" cy="-6" r="6" fill="#fff" stroke="none"/><circle cx="-8" cy="-5" r="3" fill="#0a0d14" stroke="none"/><circle cx="10" cy="-5" r="3" fill="#0a0d14" stroke="none"/>';
+H.s5 = `<svg class="ill" viewBox="0 0 900 780">
+    <g data-pop="${T(5, .2)}">
+      <rect x="130" y="150" width="180" height="330" rx="30" class="pn" stroke="#ff8a5b" stroke-width="5"/>
+      <rect x="146" y="180" width="148" height="270" rx="14" fill="#0a0d14" stroke="none"/>
+      <rect id="phoneHit" x="146" y="180" width="148" height="270" rx="14" fill="#ff4d5e" stroke="none" opacity="0"/>
+      <rect x="176" y="280" width="88" height="62" rx="12" stroke="#ff8a5b" stroke-width="4"/><circle cx="244" cy="311" r="6" fill="#ff8a5b" stroke="none"/>
+    </g>
+    <g id="wifi" transform="translate(220 128)">${[0, 1, 2].map(i => `<path d="M${-18 - i * 18},${-6 - i * 14} Q0,${-22 - i * 22} ${18 + i * 18},${-6 - i * 14}" stroke="#ff8a5b" stroke-width="5"/>`).join('')}</g>
+    <g transform="translate(314 168)"><g data-pop="${T(5, .6)}"><circle r="36" fill="#ff8a5b" stroke="none"/><path d="M0,-22 C14,-8 16,6 8,16 C4,20 -4,20 -8,16 C-16,6 -10,-6 -4,-10 C-4,-2 0,2 4,0 C6,-8 2,-14 0,-22Z" fill="#fff" stroke="none"/></g></g>
+    <text x="220" y="545" font-size="44" font-weight="700" text-anchor="middle" style="fill:#ff8a5b" data-fade="${T(5, .6)},${T(5, .8)}">热钱包</text>
+    <text x="220" y="590" font-size="24" class="muted" text-anchor="middle" data-fade="${T(5, .7)},${T(5, .9)}">手机 App · 浏览器插件</text>
+    <text x="220" y="632" font-size="26" text-anchor="middle" data-fade="${T(5, .8)},${T(5, 1.0)}">联网，方便，风险更高</text>
+    <g data-pop="${T(5, .4)}">
+      <rect x="540" y="160" width="290" height="300" rx="22" class="pn" stroke="#7fd8ff" stroke-width="5"/>
+      <rect x="560" y="180" width="250" height="260" rx="12" fill="#0a0d14" stroke="#2a3346" stroke-width="3"/>
+      <rect x="620" y="250" width="130" height="120" rx="16" class="pn" stroke="#7fd8ff" stroke-width="4"/>
+      <rect x="640" y="268" width="90" height="40" rx="6" fill="#10202b" stroke="#7fd8ff" stroke-width="2.5"/>
+      <circle cx="665" cy="340" r="9" stroke="#7fd8ff" stroke-width="3"/><circle cx="705" cy="340" r="9" stroke="#7fd8ff" stroke-width="3"/>
+    </g>
+    <g transform="translate(826 172)"><g data-pop="${T(5, .8)}"><circle r="36" fill="#5bc8ff" stroke="none"/><g stroke="#fff" stroke-width="4.5"><line x1="0" y1="-20" x2="0" y2="20"/><line x1="-17" y1="-10" x2="17" y2="10"/><line x1="-17" y1="10" x2="17" y2="-10"/></g></g></g>
+    <path id="shield" d="M510,240 Q480,320 510,400" stroke="#7fd8ff" stroke-width="8" opacity="0"/>
+    <text x="685" y="545" font-size="44" font-weight="700" text-anchor="middle" style="fill:#7fd8ff" data-fade="${T(5, .8)},${T(5, 1.0)}">冷钱包</text>
+    <text x="685" y="590" font-size="24" class="muted" text-anchor="middle" data-fade="${T(5, .9)},${T(5, 1.1)}">硬件钱包 · 私钥离线</text>
+    <text x="685" y="632" font-size="26" text-anchor="middle" data-fade="${T(5, 1.0)},${T(5, 1.2)}">离线，更安全，稍麻烦</text>
+    <g id="bug1" opacity="0">${BUG}</g><g id="bug2" opacity="0">${BUG}</g>
+    <g data-pop="${T(5, 3.9)}"><rect x="130" y="680" width="640" height="76" rx="38" fill="rgba(255,255,255,.04)" stroke="#34405a" stroke-width="3"/>
+      <text x="450" y="729" font-size="30" text-anchor="middle">放在交易所 = <tspan font-weight="700" style="fill:var(--c)">钥匙由平台代管</tspan></text></g>
+  </svg>
+  ${textBlock(5, '黑话 #05', '热钱包 vs 冷钱包', '', '热钱包联网，*方便但容易被盗*；冷钱包离线，像*保险柜*。', '大钱放冷钱包，零钱放热钱包。')}`;
+
+// 6 智能合约
+H.s6 = `<svg class="ill" viewBox="0 0 900 780">
+    <g data-pop="${T(6, .2)}">
+      <rect x="220" y="30" width="460" height="720" rx="36" class="pn" stroke="var(--c)" stroke-width="5"/>
+      <rect x="258" y="70" width="384" height="210" rx="18" fill="#0a0d14" stroke="#2a3346" stroke-width="3"/>
+      <rect x="580" y="320" width="44" height="80" rx="8" fill="#0a0d14" stroke="#34405a" stroke-width="3"/>
+      <text x="602" y="430" font-size="20" class="muted" text-anchor="middle">投币</text>
+      <rect x="290" y="620" width="320" height="90" rx="14" fill="#0a0d14" stroke="#34405a" stroke-width="3"/>
+    </g>
+    <text id="code0" x="282" y="124" class="mono" font-size="28" style="fill:#c9b8ff;white-space:pre"></text>
+    <text id="code1" x="282" y="172" class="mono" font-size="28" style="white-space:pre"></text>
+    <text id="code2" x="282" y="236" class="mono" font-size="24" style="fill:#5d6679"></text>
+    <g transform="translate(380 470)"><path id="gear1" d="${gear(66, 10)}" fill="#1b2336" stroke="var(--c)" stroke-width="4" data-fade="${T(6, .5)},${T(6, .7)}"/><circle r="16" stroke="var(--c)" data-fade="${T(6, .5)},${T(6, .7)}"/></g>
+    <g transform="translate(486 524)"><path id="gear2" d="${gear(48, 8)}" fill="#1b2336" stroke="var(--c)" stroke-width="4" data-fade="${T(6, .5)},${T(6, .7)}"/><circle r="12" stroke="var(--c)" data-fade="${T(6, .5)},${T(6, .7)}"/></g>
+    <g id="vcoin" opacity="0">${coin('1', '#f0b90b', 28, 26)}</g>
+    <g id="ticket" opacity="0"><rect x="-110" y="-38" width="220" height="76" rx="12" fill="var(--c)" stroke="none"/><text y="12" font-size="34" font-weight="700" text-anchor="middle" style="fill:#fff">票 ✓</text></g>
+    <g transform="translate(790 120)"><g data-pop="${T(6, 3.8)}"><rect x="-26" y="-6" width="52" height="44" rx="8" fill="var(--c)" stroke="none"/><path d="M-15,-6 L-15,-20 A15,15 0 0 1 15,-20 L15,-6" stroke="var(--c)" stroke-width="7"/></g></g>
+    <text x="790" y="205" font-size="26" font-weight="700" text-anchor="middle" class="cc" data-fade="${T(6, 3.9)},${T(6, 4.1)}">规则上链</text>
+    <text x="790" y="240" font-size="24" text-anchor="middle" class="muted" data-fade="${T(6, 4.0)},${T(6, 4.2)}">谁都改不了</text>
+  </svg>
+  ${textBlock(6, '黑话 #06', '智能合约', 'Smart Contract', '写在链上的程序，*条件满足就自动执行*，像一台自动售货机。', '能自动执行 ≠ 一定安全：代码有漏洞也会被黑。')}`;
+
+// 7 合约交易
+const PRICE = [[120, 330], [200, 296], [280, 318], [360, 270], [440, 300], [520, 350], [590, 322], [660, 392], [740, 452], [770, 470]];
+H.s7 = `<svg class="ill" viewBox="0 0 900 780">
+    <g data-pop="${T(7, .25)}"><rect x="90" y="16" width="720" height="84" rx="42" fill="rgba(255,77,94,.12)" stroke="#ff4d5e" stroke-width="4"/>
+      <text x="450" y="71" font-size="36" font-weight="700" text-anchor="middle">交易所里的「合约」≠ 智能合约</text></g>
+    <line x1="80" y1="530" x2="850" y2="530" stroke="#2a3346" stroke-width="3" data-fade="${T(7, .6)},${T(7, .8)}"/>
+    <line x1="80" y1="150" x2="80" y2="530" stroke="#2a3346" stroke-width="3" data-fade="${T(7, .6)},${T(7, .8)}"/>
+    <line x1="120" y1="330" x2="850" y2="330" stroke="#5d6679" stroke-width="2.5" stroke-dasharray="4 10" data-fade="${T(7, .8)},${T(7, 1.0)}"/>
+    <line x1="80" y1="440" x2="850" y2="440" stroke="#ff4d5e" stroke-width="4" stroke-dasharray="14 10" data-fade="${T(7, 1.0)},${T(7, 1.2)}"/>
+    <text x="96" y="474" font-size="24" style="fill:#ff4d5e" data-fade="${T(7, 1.0)},${T(7, 1.2)}">强平线（约 −10%）</text>
+    <g transform="translate(96 205)"><g data-pop="${T(7, .8)}"><rect x="-10" y="-30" width="150" height="50" rx="25" fill="#2fbf71" stroke="none"/><text x="65" y="4" font-size="26" font-weight="700" text-anchor="middle" style="fill:#fff">开多 10×</text></g></g>
+    <path id="price" d="M${PRICE.map(p => p.join(',')).join(' L')}" stroke="#fff" stroke-width="5" pathLength="1"/>
+    <circle id="pdot" r="11" fill="#fff" stroke="none" opacity="0"/>
+    <g transform="translate(748 440)"><g data-pop="${T(7, 3.25)}">${Array.from({ length: 12 }, (_, i) => { const a = i / 12 * Math.PI * 2; return `<line x1="${Math.cos(a) * 30}" y1="${Math.sin(a) * 30}" x2="${Math.cos(a) * 70}" y2="${Math.sin(a) * 70}" stroke="#ff4d5e" stroke-width="7"/>`; }).join('')}
+      <circle r="24" fill="#ff4d5e" stroke="none"/></g></g>
+    <g transform="translate(640 240)"><g data-pop="${T(7, 3.35)}"><rect x="-90" y="-44" width="180" height="88" rx="20" fill="#ff4d5e" stroke="none"/><text y="16" font-size="48" font-weight="700" text-anchor="middle" style="fill:#fff">爆仓</text></g></g>
+    <text x="80" y="600" font-size="28" data-fade="${T(7, .9)},${T(7, 1.1)}">保证金</text>
+    <rect x="200" y="572" width="640" height="40" rx="20" class="pn" stroke="#2a3346" data-fade="${T(7, .9)},${T(7, 1.1)}"/>
+    <rect id="margin" x="204" y="576" width="632" height="32" rx="16" fill="#2fbf71" stroke="none" opacity="0"/>
+    <text x="80" y="690" font-size="28" class="muted" data-fade="${T(7, 3.6)},${T(7, 3.8)}">价格小跌 × 10 倍杠杆 = 本金归零</text>
+  </svg>
+  ${textBlock(7, '黑话 #07', '合约交易', 'Futures', '交易所说的“合约”，是用保证金*加杠杆押涨跌*，和智能合约不是一回事。', '10 倍杠杆：价格反向走约 10%，就可能爆仓。')}`;
+
+// 8 币安 / BNB Chain / BNB / Gas
+const ROWS8 = [
+  ['币安 Binance', '中心化交易所（CEX）：撮合买卖、代管资产', '<path d="M-30,-8 L0,-26 30,-8Z" fill="none" stroke="#f0b90b" stroke-width="4"/><g stroke="#f0b90b" stroke-width="4"><line x1="-20" y1="-4" x2="-20" y2="20"/><line x1="0" y1="-4" x2="0" y2="20"/><line x1="20" y1="-4" x2="20" y2="20"/><line x1="-30" y1="24" x2="30" y2="24"/></g>'],
+  ['BNB Chain', '一条公链：可以部署、运行智能合约', '<g stroke="#f0b90b" stroke-width="5"><rect x="-32" y="-10" width="32" height="20" rx="10"/><rect x="0" y="-10" width="32" height="20" rx="10"/></g>'],
+  ['BNB', '币安发行的代币；在 BNB Chain 上用来付 Gas', '<circle r="26" fill="#f0b90b" stroke="none"/><text y="7" font-size="18" font-weight="700" text-anchor="middle" style="fill:#0a0d14">BNB</text>'],
+];
+H.s8 = `<svg class="ill" viewBox="0 0 900 780">
+    ${ROWS8.map(([ti, de, ic], i) => `<g transform="translate(0 ${20 + i * 186})"><g data-pop="${T(8, .3 + i * .45)}">
+      <rect x="30" y="0" width="840" height="166" rx="28" class="pn" stroke="#2a3346" stroke-width="3"/>
+      <circle cx="120" cy="83" r="54" fill="rgba(240,185,11,.12)" stroke="none"/><g transform="translate(120 83)">${ic}</g>
+      <text x="200" y="72" font-size="40" font-weight="700">${ti}</text><text x="200" y="120" font-size="27" class="muted">${de}</text></g></g>`).join('')}
+    <g transform="translate(0 590)"><g data-pop="${T(8, 1.9)}">
+      <rect x="30" y="0" width="840" height="170" rx="28" fill="rgba(240,185,11,.08)" stroke="#f0b90b" stroke-width="3"/>
+      <g transform="translate(130 104)"><path d="M-70,0 A70,70 0 0 1 70,0" stroke="#34405a" stroke-width="12"/><path d="M-70,0 A70,70 0 0 1 70,0" stroke="#f0b90b" stroke-width="12" pathLength="1" data-draw="${T(8, 2.1)},${T(8, 2.9)}"/>
+        <line id="needle" x1="0" y1="0" x2="-54" y2="0" stroke="#fff" stroke-width="6"/><circle r="9" fill="#fff" stroke="none"/></g>
+      <text x="240" y="76" font-size="38" font-weight="700">Gas = 链上手续费</text>
+      <text x="240" y="122" font-size="27" class="muted">转账、调用合约都要付，像给车加油</text>
+    </g></g>
+  </svg>
+  ${textBlock(8, '黑话 #08', '币安 · BNB · Gas', '', '三个名字，三样东西：*交易所*、*一条链*、*一种币*。', '在链上做任何操作，都要付 Gas。')}`;
+
+// 9 学习路线
+const ROAD = [['弄懂这 8 个概念', '能用自己的话讲给朋友听'], ['先用测试网练手', '测试网的币不值钱，随便试错'], ['备份好助记词', '抄在纸上，放在安全的地方'], ['远离高杠杆', '承诺「稳赚不赔」的，基本都是骗局']];
+H.s9 = `<svg class="ill" viewBox="0 0 900 780">
+    <line x1="80" y1="100" x2="80" y2="660" stroke="#2a3346" stroke-width="10"/>
+    <line id="roadFill" x1="80" y1="100" x2="80" y2="100" stroke="var(--c)" stroke-width="10"/>
+    ${ROAD.map(([a, b], i) => `<g transform="translate(80 ${100 + i * 186})"><circle r="40" class="pn" stroke="var(--c)" stroke-width="5"/><text y="13" font-size="36" font-weight="700" text-anchor="middle" class="mono cc">${i + 1}</text></g>
+      ${CHECK(112, 72 + i * 186, T(9, .9 + i * .55), 18)}
+      <text x="160" y="${96 + i * 186}" font-size="44" font-weight="700" data-fade="${T(9, .6 + i * .55)},${T(9, .85 + i * .55)}">${a}</text>
+      <text x="160" y="${142 + i * 186}" font-size="28" class="muted" data-fade="${T(9, .7 + i * .55)},${T(9, .95 + i * .55)}">${b}</text>`).join('')}
+  </svg>
+  ${textBlock(9, 'ALL BLOCKS MINED', '新手学习路线', '', '按顺序来，*先学习，再决定*，别急着投真钱。', '加密资产波动很大，任何时候都不要借钱入场。')}`;
+
+/* ======================= 组装 ======================= */
+const scenesEl = document.getElementById('scenes');
+SC.forEach(([id, , , col]) => scenesEl.insertAdjacentHTML('beforeend', `<section class="scene" id="${id}" style="--c:${col}">${H[id]}</section>`));
+
+// 顶部区块链：8 个区块
+const CH = document.getElementById('chain');
+{
+  let h = '';
+  for (let i = 0; i < 8; i++) {
+    const x = 70 + i * 122;
+    if (i > 0) h += `<line id="cl${i}" x1="${x - 38}" y1="52" x2="${x}" y2="52" stroke="#243049" stroke-width="4"/>`;
+    h += `<g id="cb${i}" transform="translate(${x} 10)"><g class="cbi" style="transform-box:fill-box;transform-origin:50% 50%">
+      <rect width="84" height="84" rx="16" fill="#0f1420" stroke="#243049" stroke-width="3" stroke-dasharray="6 6"/>
+      <text x="42" y="36" font-family="JetBrains Mono" font-weight="700" font-size="22" text-anchor="middle" fill="#3a4560">#0${i + 1}</text>
+      <text x="42" y="66" font-family="JetBrains Mono" font-size="16" text-anchor="middle" fill="#3a4560">····</text></g></g>`;
+  }
+  CH.innerHTML = h;
+}
+const BLOCK_HASH = Array.from({ length: 8 }, hash4);
+
+/* ======================= 工具 ======================= */
+const $ = id => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, p) => a + (b - a) * p;
+const prog = (t, a, b) => clamp((t - a) / (b - a));
+const easeOut = p => 1 - Math.pow(1 - p, 3);
+const easeInOut = p => p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+const easeOutBack = p => { const c1 = 1.7, c3 = c1 + 1; return p <= 0 ? 0 : 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2); };
+const nums = s => s.split(',').map(Number);
+
+const A = {
+  rise: [...document.querySelectorAll('[data-rise]')].map(el => [el, +el.dataset.rise]),
+  pop: [...document.querySelectorAll('[data-pop]')].map(el => [el, +el.dataset.pop]),
+  draw: [...document.querySelectorAll('[data-draw]')].map(el => [el, ...nums(el.dataset.draw)]),
+  fade: [...document.querySelectorAll('[data-fade]')].map(el => [el, ...nums(el.dataset.fade)]),
+  out: [...document.querySelectorAll('[data-out]')].map(el => [el, ...nums(el.dataset.out)]),
+};
+A.draw.forEach(([el]) => el.style.strokeDasharray = '1 1');
+$('price').style.strokeDasharray = '1 1';
+
+// 解码文字：乱码逐字变成真字，*包起来* 的是重点
+const GLY = '01#$%&*<>/=+?ABCDEF';
+const DEC = [...document.querySelectorAll('[data-decode]')].map(el => {
+  const chars = [];
+  el.textContent.split('*').forEach((seg, i) => [...seg].forEach(ch => chars.push([ch, i % 2 === 1])));
+  el.textContent = '';
+  return { el, t0: +el.dataset.decode, chars };
+});
+const esc = c => c === '<' ? '&lt;' : c === '>' ? '&gt;' : c === '&' ? '&amp;' : c;
+function renderDecode(d, t) {
+  let out = '', hi = false;
+  d.chars.forEach(([ch, h], i) => {
+    const tr = d.t0 + i * 0.022;
+    let s = '';
+    if (t >= tr) s = esc(ch);
+    else if (t >= tr - 0.16) s = `<span class="gl">${esc(GLY[(i * 7 + Math.floor(t * 30) * 13) % GLY.length])}</span>`;
+    if (h !== hi) { out += h ? '<b>' : '</b>'; hi = h; }
+    out += s;
+  });
+  if (hi) out += '</b>';
+  if (d.last !== out) { d.el.innerHTML = out; d.last = out; }
+}
+
+/* ======================= 音效事件 ======================= */
+const EVENTS = [];
+SC.forEach(([, s], i) => { if (i > 0) EVENTS.push({ t: s, type: 'whoosh' }); });
+for (let k = 1; k <= 8; k++) EVENTS.push({ t: T(k, .3), type: 'mine' });
+DEC.forEach(d => EVENTS.push({ t: d.t0, type: 'decode', d: d.chars.length * 0.022 }));
+A.pop.forEach(([el, t]) => EVENTS.push({ t, type: 'pop' }));
+EVENTS.push({ t: T(1, 2.95), type: 'click' }, { t: T(1, 3.1), type: 'alarm' }, { t: T(1, 4.2), type: 'stamp' });
+EVENTS.push({ t: T(3, 2.5), type: 'mine' }, { t: T(3, 3.3), type: 'coin' });
+EVENTS.push({ t: T(4, 3.7), type: 'stamp' });
+EVENTS.push({ t: T(5, 3.0), type: 'zap' }, { t: T(5, 3.0), type: 'shield' });
+EVENTS.push({ t: T(6, 2.0), type: 'coin' }, { t: T(6, 2.1), type: 'gear', d: 1.0 }, { t: T(6, 3.1), type: 'ding' });
+EVENTS.push({ t: T(7, 3.25), type: 'boom' });
+for (let i = 0; i < 4; i++) EVENTS.push({ t: T(9, .9 + i * .55), type: 'ding' });
+const popT = new Set(); // 同一时刻的 pop 只保留一个
+const EV = EVENTS.filter(e => { if (e.type !== 'pop') return true; const k = Math.round(e.t * 10); if (popT.has(k)) return false; popT.add(k); return true; })
+  .sort((a, b) => a.t - b.t);
+window.EVENTS = EV;
+
+/* ======================= 渲染 ======================= */
+const hexToRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+function mixCol(a, b, p) { const x = hexToRgb(a), y = hexToRgb(b); return `rgb(${x.map((v, i) => Math.round(lerp(v, y[i], p))).join(',')})`; }
+
+function render(t) {
+  // 当前场景与配色
+  let cur = 0; SC.forEach(([, s], i) => { if (t >= s) cur = i; });
+  const [, cs, , ccol] = SC[cur];
+  const prevCol = SC[Math.max(0, cur - 1)][3];
+  const colNow = mixCol(prevCol, ccol, easeInOut(prog(t, cs, cs + .6)));
+  $('glow').style.background = `radial-gradient(50% 42% at 50% 40%, ${colNow.replace('rgb', 'rgba').replace(')', ',.16)')}, transparent 72%)`;
+  $('mFill').setAttribute('fill', colNow);
+
+  // 场景切换：新场景自上而下扫描显现，旧场景淡出
+  SC.forEach(([id, s, e], i) => {
+    const el = $(id);
+    const vis = t >= s && t < e + 0.45;
+    el.style.visibility = vis ? 'visible' : 'hidden';
+    if (!vis) return;
+    const pin = i === 0 ? 1 : easeInOut(prog(t, s, s + 0.55));
+    const pout = easeInOut(prog(t, e, e + 0.45));
+    el.style.clipPath = pin < 1 ? `inset(0 0 ${(1 - pin) * 100}% 0)` : 'none';
+    el.style.opacity = 1 - pout;
+  });
+  const sp = prog(t, cs, cs + 0.55);
+  $('scan').style.opacity = cur > 0 && sp > 0 && sp < 1 ? Math.sin(sp * Math.PI) : 0;
+  $('scan').style.top = `${easeInOut(sp) * 1920}px`;
+  $('scan').style.setProperty('--sc', ccol);
+
+  // 顶部区块链
+  let mined = 0;
+  for (let i = 0; i < 8; i++) {
+    const tm = T(i + 1, .3), p = prog(t, tm, tm + .45);
+    const g = $('cb' + i), inner = g.firstElementChild, rect = inner.children[0], lbl = inner.children[1], hs = inner.children[2];
+    const col = SC[i + 1][3];
+    if (p > 0) {
+      mined = i + 1;
+      rect.setAttribute('fill', mixCol('#0f1420', '#16203a', p)); rect.setAttribute('stroke', col); rect.setAttribute('stroke-dasharray', 'none');
+      rect.setAttribute('stroke-width', i + 1 === cur ? 5 : 3);
+      lbl.setAttribute('fill', col);
+      hs.setAttribute('fill', '#8a93a6');
+      hs.textContent = p < 1 ? Array.from({ length: 4 }, (_, j) => HEX[(Math.floor(t * 40) * (j + 3) + i * 5) % 16]).join('') : BLOCK_HASH[i];
+      inner.style.transform = `scale(${p < 1 ? easeOutBack(p) * .25 + .75 + (1 - p) * 0 : 1 + (i + 1 === cur ? .06 * Math.sin(t * 4) : 0)})`;
+      if (i > 0) { const l = $('cl' + i); l.setAttribute('stroke', col); }
+    } else {
+      rect.setAttribute('fill', '#0f1420'); rect.setAttribute('stroke', '#243049'); rect.setAttribute('stroke-dasharray', '6 6');
+      lbl.setAttribute('fill', '#3a4560'); hs.setAttribute('fill', '#3a4560'); hs.textContent = '····';
+      inner.style.transform = 'none';
+      if (i > 0) $('cl' + i).setAttribute('stroke', '#243049');
+    }
+  }
+  $('blkLabel').textContent = mined >= 8 && t > T(9, .2) ? 'ALL 8 BLOCKS ✓' : `BLOCK #0${mined}`;
+
+  // 通用动画
+  for (const [el, a] of A.rise) { const p = easeOut(prog(t, a, a + .5)); el.style.opacity = p; el.style.translate = `0 ${(1 - p) * 30}px`; }
+  for (const [el, a] of A.pop) { const p = prog(t, a, a + .4); el.style.opacity = p > 0 ? 1 : 0; el.style.transform = `scale(${easeOutBack(p)})`; }
+  for (const [el, a, b] of A.draw) el.style.strokeDashoffset = 1 - easeInOut(prog(t, a, b));
+  for (const [el, a, b] of A.fade) el.style.opacity = prog(t, a, b);
+  for (const [el, a, b] of A.out) el.style.opacity = 1 - prog(t, a, b);
+  DEC.forEach(d => renderDecode(d, t));
+
+  // 吉祥物：跳动 + 表情
+  const shock = (t > T(1, 3.0) && t < T(1, 4.8)) || (t > T(7, 3.2) && t < T(7, 5.0));
+  const frown = (t > T(4, 3.0) && t < T(4, 5.2)) || (t > T(5, 2.9) && t < T(5, 3.6));
+  const bounce = Math.abs(Math.sin(t * 3.2)) * 10 * (shock ? 0 : 1);
+  const jump = shock ? Math.sin((t * 30)) * 3 : 0;
+  $('mBody').setAttribute('transform', `translate(${jump} ${-bounce})`);
+  const blink = (t % 3.7) < 0.12 && !shock;
+  const er = shock ? 17 : 14, pr = shock ? 4 : 6.5;
+  $('me1').setAttribute('r', er); $('me2').setAttribute('r', er);
+  $('me1').setAttribute('transform', blink ? 'translate(0 -4) scale(1 .12) translate(0 4)' : '');
+  $('me2').setAttribute('transform', blink ? 'translate(0 -4) scale(1 .12) translate(0 4)' : '');
+  $('mp1').setAttribute('r', blink ? 0 : pr); $('mp2').setAttribute('r', blink ? 0 : pr);
+  $('mMouth').setAttribute('d', shock ? 'M-9,28 a9,11 0 1 0 18,0 a9,11 0 1 0 -18,0' : frown ? 'M-14,32 Q0,20 14,32' : 'M-14,22 Q0,34 14,22');
+  $('mBrow').setAttribute('d', frown ? 'M-34,-26 L-12,-20 M34,-26 L12,-20' : '');
+
+  /* ---- 0 开场：黑话漂浮 ---- */
+  document.querySelectorAll('#s0 .jg').forEach(g => {
+    const i = +g.dataset.i, x = +g.dataset.x + Math.sin(t * .9 + i) * 10, y = +g.dataset.y + Math.cos(t * 1.1 + i * 2) * 8;
+    g.setAttribute('transform', `translate(${x} ${y})`);
+  });
+
+  /* ---- 1 区块链：篡改 ---- */
+  const cp = easeInOut(prog(t, T(1, 2.2), T(1, 2.9)));
+  $('cursor').setAttribute('transform', `translate(${lerp(760, 330, cp)} ${lerp(760, 205, cp)}) scale(${t > T(1, 2.9) && t < T(1, 3.05) ? .85 : 1})`);
+  $('cursor').setAttribute('opacity', t > T(1, 2.1) && t < T(1, 4.0) ? 1 : 0);
+  const br = easeOutBack(prog(t, T(1, 3.2), T(1, 3.5)));
+  const lk = $('lk1').children;
+  lk[0].setAttribute('transform', `translate(${-10 * br} ${6 * br}) rotate(${-20 * br} 430 190)`);
+  lk[1].setAttribute('transform', `translate(${10 * br} ${-6 * br}) rotate(${20 * br} 460 190)`);
+  [...lk].forEach(r => r.setAttribute('stroke', br > .05 ? '#ff4d5e' : 'var(--c)'));
+
+  /* ---- 2 比特币 ---- */
+  const flip = prog(t, T(2, .2), T(2, 1.0));
+  $('btc').setAttribute('transform', `scale(${Math.cos(flip * Math.PI * 2) * .88 + (flip >= 1 ? 0.12 : .12 * Math.cos(flip * Math.PI * 2) / Math.abs(Math.cos(flip * Math.PI * 2) || 1))} 1)`);
+  $('supply').setAttribute('width', 732 * .95 * easeInOut(prog(t, T(2, 1.1), T(2, 2.2))));
+  $('pick').parentNode.setAttribute('transform', `translate(150 712) rotate(${t > T(2, 1.5) ? Math.max(0, Math.sin((t - T(2, 1.5)) * 9)) * -35 : 0} 0 0)`);
+
+  /* ---- 3 链上 ---- */
+  const mx = lerp(40, 820, (Math.sin((t - T(3, .6)) * 1.4 - Math.PI / 2) + 1) / 2);
+  $('mag').setAttribute('transform', `translate(${mx} 110)`);
+  $('mag').setAttribute('opacity', prog(t, T(3, .6), T(3, .8)) * (1 - prog(t, T(3, 1.8), T(3, 2.0))));
+  const LED = [['你  +0.10 BTC', '你  −50 USDT', '他  +0.02 ETH'], ['你  −0.03 BTC', '她  +120 USDT', '你  +0.50 ETH']];
+  const li = Math.floor(t / .45) % 2;
+  for (let i = 0; i < 3; i++) $('ledger' + i).textContent = LED[(li + i) % 2][i];
+  const c1 = easeInOut(prog(t, T(3, 1.8), T(3, 2.5))), c2 = easeInOut(prog(t, T(3, 2.7), T(3, 3.3)));
+  // 沿两段贝塞尔曲线运动
+  const bez = (p0, p1, p2, p3, u) => [0, 1].map(k => Math.pow(1 - u, 3) * p0[k] + 3 * Math.pow(1 - u, 2) * u * p1[k] + 3 * (1 - u) * u * u * p2[k] + u * u * u * p3[k]);
+  const wp = c2 > 0 ? bez([646, 180], [700, 280], [710, 360], [705, 425], c2) : bez([380, 460], [450, 300], [560, 240], [646, 180], c1);
+  $('wcoin').setAttribute('transform', `translate(${wp[0]} ${wp[1]})`);
+  $('wcoin').setAttribute('opacity', t > T(3, 1.8) && t < T(3, 3.4) ? 1 : 0);
+
+  /* ---- 4 私钥 ---- */
+  const kp = easeInOut(prog(t, T(4, .6), T(4, 1.2)));
+  $('key').setAttribute('transform', `translate(${lerp(180, 640, kp)} ${lerp(160, 150, kp) - Math.sin(kp * Math.PI) * 60}) rotate(${lerp(-30, 0, kp)}) scale(${lerp(.6, 1.5, kp)})`);
+  $('key').setAttribute('opacity', t > T(4, .6) ? 1 : 0);
+
+  /* ---- 5 冷热钱包 ---- */
+  document.querySelectorAll('#wifi path').forEach((p, i) => p.setAttribute('opacity', clamp(Math.sin(t * 4 - i * .8) * .5 + .5)));
+  const b1 = easeInOut(prog(t, T(5, 2.2), T(5, 3.0)));
+  $('bug1').setAttribute('transform', `translate(${lerp(450, 220, b1)} ${lerp(760, 320, b1)}) rotate(${Math.sin(t * 20) * 10}) scale(${1 - .5 * prog(t, T(5, 2.9), T(5, 3.1))})`);
+  $('bug1').setAttribute('opacity', t > T(5, 2.2) && t < T(5, 3.1) ? 1 : 0);
+  $('phoneHit').setAttribute('opacity', t > T(5, 3.0) && t < T(5, 3.9) ? .45 * (Math.sin((t - T(5, 3.0)) * 25) > 0 ? 1 : .3) : 0);
+  const b2 = t < T(5, 3.0) ? easeInOut(prog(t, T(5, 2.3), T(5, 3.0))) : 1 - easeOut(prog(t, T(5, 3.0), T(5, 3.6)));
+  $('bug2').setAttribute('transform', `translate(${lerp(460, 490, b2)} ${lerp(760, 320, b2)}) rotate(${t > T(5, 3.0) ? (t - T(5, 3.0)) * 400 : Math.sin(t * 20) * 10})`);
+  $('bug2').setAttribute('opacity', t > T(5, 2.3) && t < T(5, 3.6) ? 1 : 0);
+  $('shield').setAttribute('opacity', t > T(5, 2.9) && t < T(5, 3.8) ? 1 - prog(t, T(5, 3.4), T(5, 3.8)) : 0);
+
+  /* ---- 6 智能合约 ---- */
+  const CODE = ['if 收到 1 币:', '    发出 1 张票', '# 规则写死在链上'];
+  let budget = Math.floor(clamp((t - T(6, .4)) / 1.3) * 30);
+  CODE.forEach((s, i) => { const n = Math.min(s.length, Math.max(0, budget)); $('code' + i).textContent = s.slice(0, n); budget -= s.length; });
+  const vc = easeInOut(prog(t, T(6, 1.6), T(6, 2.0)));
+  $('vcoin').setAttribute('transform', `translate(${lerp(820, 602, vc)} ${lerp(300, 352, vc) - Math.sin(vc * Math.PI) * 80})`);
+  $('vcoin').setAttribute('opacity', t > T(6, 1.6) && t < T(6, 2.05) ? 1 : 0);
+  const gs = t < T(6, 2.1) ? 0 : t < T(6, 3.1) ? (t - T(6, 2.1)) * 300 : 300 + (t - T(6, 3.1)) * 20;
+  $('gear1').setAttribute('transform', `rotate(${gs})`); $('gear2').setAttribute('transform', `rotate(${-gs * 1.4 + 11})`);
+  const tk = easeOutBack(prog(t, T(6, 3.0), T(6, 3.5)));
+  $('ticket').setAttribute('transform', `translate(450 ${lerp(680, 660, tk)}) scale(${tk})`);
+  $('ticket').setAttribute('opacity', tk > 0 ? 1 : 0);
+
+  /* ---- 7 合约交易 ---- */
+  const pp = prog(t, T(7, .9), T(7, 3.25));
+  $('price').style.strokeDashoffset = 1 - pp;
+  const pe = $('price'), L = pe.getTotalLength(), pt = pe.getPointAtLength(L * Math.min(pp, .965));
+  $('pdot').setAttribute('cx', pt.x); $('pdot').setAttribute('cy', pt.y);
+  $('pdot').setAttribute('opacity', t > T(7, .9) && t < T(7, 3.3) ? 1 : 0);
+  const m = t > T(7, 3.25) ? 0 : clamp(1 - (pt.y - 330) / 110, 0, 1.25) / 1.25;
+  $('margin').setAttribute('width', 632 * m);
+  $('margin').setAttribute('fill', m > .5 ? '#2fbf71' : m > .25 ? '#f0b90b' : '#ff4d5e');
+  $('margin').setAttribute('opacity', t > T(7, 1.0) ? 1 : 0);
+
+  /* ---- 8 Gas ---- */
+  $('needle').setAttribute('transform', `rotate(${lerp(0, 150, easeInOut(prog(t, T(8, 2.1), T(8, 2.9)))) + Math.sin(t * 6) * 3 * prog(t, T(8, 2.9), T(8, 3.2))})`);
+
+  /* ---- 9 学习路线 ---- */
+  $('roadFill').setAttribute('y2', lerp(100, 658, easeInOut(prog(t, T(9, .5), T(9, 2.7)))));
+
+  $('fade').style.opacity = easeInOut(prog(t, 59.3, 60));
+}
+window.render = render;
+window.DURATION = DURATION;
+
+/* ======================= 浏览器预览 ======================= */
+if (!navigator.webdriver) {
+  let t0 = performance.now(), paused = false, cur = 0;
+  const stage = $('stage');
+  const fit = () => { const s = Math.min(innerWidth / 1080, innerHeight / 1920); stage.style.transform = `scale(${s})`; stage.style.transformOrigin = '0 0'; };
+  addEventListener('resize', fit); fit();
+  addEventListener('keydown', e => {
+    if (e.code === 'Space') { paused = !paused; t0 = performance.now() - cur * 1000; }
+    if (e.code === 'ArrowRight') { cur = Math.min(DURATION, cur + 1); t0 = performance.now() - cur * 1000; }
+    if (e.code === 'ArrowLeft') { cur = Math.max(0, cur - 1); t0 = performance.now() - cur * 1000; }
+  });
+  const loop = () => { if (!paused) cur = ((performance.now() - t0) / 1000) % DURATION; render(cur); requestAnimationFrame(loop); };
+  document.fonts.ready.then(loop);
+} else {
+  render(0);
+}
+</script>
+</body>
+</html>
