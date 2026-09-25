@@ -113,9 +113,10 @@ def _cloud_h(x, y, t, q, p):
 
 
 @njit(parallel=True, cache=True, fastmath=True)
-def march(dirs, ox, oy, oz, tmax, t, q, p, sdx, sdy, sdz, shade_steps, shade_len, top, ww, wrho, wl):
+def march(dirs, ox, oy, oz, tmax, t, q, p, sdx, sdy, sdz, shade_steps, shade_len, top, ww, wrho, wl, rin):
     """返回每个像素的命中距离（未命中为 -1）、法线、太阳可见度、缝隙遮蔽（近、远两个尺度），
-    以及视线穿过云顶絮状薄雾层的光学厚度 tau（薄雾密度 wrho·exp(-离云顶高度/ww)，按 wl 米尺度的噪声成絮）。"""
+    以及视线穿过云顶絮状薄雾层的光学厚度 tau（薄雾密度 wrho·exp(-离云顶高度/ww)，按 wl 米尺度的噪声成絮）；
+    镜头在云里时，视线在云体里走过的距离按消光系数 rin 计入 tau。"""
     H, W = dirs.shape[0], dirs.shape[1]
     hit = np.full((H, W), -1.0)
     nzs = np.zeros((H, W)); nxs = np.zeros((H, W)); nys = np.zeros((H, W)); vis = np.ones((H, W)); ao = np.ones((H, W))
@@ -135,6 +136,24 @@ def march(dirs, ox, oy, oz, tmax, t, q, p, sdx, sdy, sdz, shade_steps, shade_len
             found = False
             prev = tt
             od = 0.0
+            # 起点在云里（镜头正在穿云）：先在云体里前进，按穿过的云的长度累积光学厚度，直到走出云顶
+            x = ox + dx * tt; y = oy + dy * tt; z = oz + dz * tt
+            h = z - _cloud_h(x, y, t, q, p)
+            if h < 0:
+                for k in range(200):
+                    st = max(3.0, min(-h / (abs(dz) + .3), 60.0))
+                    od += rin * st
+                    tt += st
+                    if od > 12.0 or tt > tlim:
+                        break
+                    x = ox + dx * tt; y = oy + dy * tt; z = oz + dz * tt
+                    h = z - _cloud_h(x, y, t, q, p)
+                    if h >= 0:
+                        break
+                if h < 0 or od > 12.0 or tt > tlim:
+                    tau[j, i] = od
+                    continue
+                prev = tt
             for k in range(240):
                 x = ox + dx * tt; y = oy + dy * tt; z = oz + dz * tt
                 c = _cloud_h(x, y, t, q, p)
@@ -225,7 +244,7 @@ def render(cam, W, H, dist_terrain, t, C, sky_amb, sun_dir, sun_rgb):
                                           np.minimum(dist_terrain, C.get('tmax', 150000.0)).astype(np.float64), float(t),
                                           params(C), _P, sd[0], sd[1], max(sd[2], .02), int(C.get('shade_steps', 8)),
                                           C.get('shade_len', 900.0), top_of(C), C.get('wisp_w', 25.0),
-                                          C.get('wisp_rho', 0.0), C.get('wisp_l', 260.0))
+                                          C.get('wisp_rho', 0.0), C.get('wisp_l', 260.0), C.get('rho_in', 0.0))
     wrap = C.get('wrap', .5)
     ndl = np.clip((nx * sd[0] + ny * sd[1] + nz * sd[2] + wrap) / (1 + wrap), 0, 1)
     cos_v = (d * sd).sum(-1)
@@ -253,6 +272,8 @@ def render(cam, W, H, dist_terrain, t, C, sky_amb, sun_dir, sun_rgb):
     # 絮状薄雾：颜色 = 天光 + 阳光（朝太阳方向的前向散射更亮）
     trans = np.exp(-tau)
     fwd = 1.0 + C.get('wisp_fwd', 1.5) * np.clip(cos_v, 0, 1) ** 6
-    wcol = (sun_rgb[None, None, :] * (C.get('sun_k', 1.0) * .55 * fwd)[..., None]
-            + sky_amb * C.get('amb', 1.0)) * np.array(C.get('albedo', (.95, .96, 1.0)))
+    # 往上看更亮、往下看更暗（在云里或贴着云顶时，光从上面来）
+    updown = .85 + .3 * np.clip(d[..., 2] * 2.0 + .5, 0, 1)
+    wcol = ((sun_rgb[None, None, :] * (C.get('sun_k', 1.0) * .55 * fwd)[..., None] + sky_amb * C.get('amb', 1.0))
+            * updown[..., None] * np.array(C.get('albedo', (.95, .96, 1.0))))
     return col.astype(np.float32), hit.astype(np.float32), trans.astype(np.float32), wcol.astype(np.float32)

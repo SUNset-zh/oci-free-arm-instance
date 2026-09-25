@@ -23,11 +23,11 @@ POST = dict(exposure_keys=[[1, .3], [60, .2], [194, 0.0]], h_dens=1.2e-5, h_base
             shadow_tint=(.92, .97, 1.08), high_tint=(1.09, 1.0, .86),
             clouds=dict(alt=9500, cover=.3, scale=7000, stretch=3.0, wind=(60, 25), thick=2.2, amb=.9, bright=.5,
                         sun_gain=1.0, shade=3.0, far=140000),
-            # 云海同 S6（海面略低一点：镜头约在 52.6–53.0 秒破云而出）
+            # 云海同 S6（海面略低一点：镜头约在 53.0 秒破云而出；在云里时按视线穿过的云的长度起雾）
             cloudsea=dict(base=5000, a1=220, s1=9000, a2=170, s2=1000, a3=26, s3=170, warp=.5, cover=.6, a4=35, s4=2800,
                           wind=(35, 12), mist=160, sun_gain=.8, sun_k=1.0, amb=1.6, amb_rgb=(.06, .09, .16), ms=.3,
                           silver=2.2, wrap=.5, soft=1.2, soft_near=4.0, fog_top=40, fog_depth=220,
-                          wisp_rho=.008, wisp_w=28),
+                          wisp_rho=.008, wisp_w=28, inside_fog=False, rho_in=.015),
             sun_disc=dict(size=.27, radiance=90.0, halo=.9, halo_w=2.0, glow=.35, veil=.35, color=(1.0, .78, .5)))
 
 

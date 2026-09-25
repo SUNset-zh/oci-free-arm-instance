@@ -223,7 +223,7 @@ def process(exr_path, cam, P):
         # 云顶的絮状薄雾（地形、天空、云都在它后面）
         out = out * ctrans[..., None] + cwisp * (1 - ctrans[..., None])
     # 镜头在云里：按镜头低于云顶的深度整体罩上云雾（穿云而出时由白到清）
-    if P.get('cloudsea'):
+    if P.get('cloudsea') and P['cloudsea'].get('inside_fog', True):
         Cs = P['cloudsea']
         ct = float(CS.cloud_top(np.array([[cam['loc'][0]]]), np.array([[cam['loc'][1]]]), P.get('time', 0.0), Cs)[0, 0])
         inside = float(np.clip((ct + Cs.get('fog_top', 25.0) - cam['loc'][2]) / Cs.get('fog_depth', 90.0), 0, 1))
