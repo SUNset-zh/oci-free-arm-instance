@@ -35,7 +35,7 @@ _AGX_INV = np.linalg.inv(_AGX).astype(np.float32)
 
 
 def agx(rgb, exposure=0.0, punch=1.0, sat=1.0):
-    x = np.maximum(rgb * (2.0 ** exposure), 1e-10) @ _AGX.T
+    x = np.maximum(rgb * (2.0 ** exposure), 1e-10) @ _AGX          # GLSL mat3 按列填充，行向量右乘即可
     mn, mx = -12.47393, 4.026069
     x = np.clip((np.log2(x) - mn) / (mx - mn), 0, 1)
     x2 = x * x; x4 = x2 * x2
@@ -43,7 +43,7 @@ def agx(rgb, exposure=0.0, punch=1.0, sat=1.0):
     y = np.clip(y, 0, 1)
     if punch != 1.0:   # 以中灰为轴的轻微对比
         y = np.clip(.5 + (y - .5) * punch, 0, 1)
-    y = y @ _AGX_INV.T
+    y = y @ _AGX_INV
     y = np.clip(y, 0, 1)
     if sat != 1.0:
         l = (y * np.array([.2126, .7152, .0722], np.float32)).sum(-1, keepdims=True)
@@ -228,7 +228,12 @@ def process(exr_path, cam, P):
         Sp = P['snow']
         dsnow = np.where(a > .5, dist, 1e9)
         sb = SN.render(cam, W, H, dsnow, P.get('time', 0.0), Sp)
-        out = out + sb[..., None] * np.array(Sp.get('color', (.6, .65, .75)), np.float32)[None, None, :]
+        sc_ = np.array(Sp.get('color', (.6, .65, .75)), np.float32)[None, None, :]
+        if Sp.get('mode', 'add') == 'over':
+            al = np.clip(sb, 0, 1)[..., None]          # 雪花遮挡背景并以自身亮度出现（阴天里对着亮天是灰点）
+            out = out * (1 - al) + sc_ * al
+        else:
+            out = out + sb[..., None] * sc_
     if P.get('bloom', .06) > 0:
         out = bloom(out, P.get('bloom_thresh', 1.0), P.get('bloom', .06))
     disp = agx(out, P.get('exposure', 0.0), P.get('punch', 1.08), P.get('sat', 1.05))

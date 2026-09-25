@@ -6,9 +6,12 @@ import bpy
 from common import blend as B
 
 
-def build(d, mat_kw=None, sun=(3.0, 118.0), alt=4500.0, sky_strength=.07, dust=.15, ozone=1.6, sun_k=1.6):
+def build(d, mat_kw=None, sun=(3.0, 118.0), alt=4500.0, sky_strength=.07, dust=.15, ozone=1.6, sun_k=1.6, overcast=None):
     mat = B.mat_lean(**dict(dict(ledge=.25), **(mat_kw or {})))
     B.load_levels(d, mat)
+    if overcast is not None:
+        w, bg = B.world_overcast(**overcast)
+        return dict(ter=B.Terrain(d), sky=None, bg=bg, sun=None, alt=alt, sun_k=0, mat=mat)
     w, sky, bg = B.world_nishita(sun[0], sun[1], strength=sky_strength, altitude=alt, dust=dust, ozone=ozone)
     col, T = B.sun_color(sun[0], alt)
     lamp = B.add_sun(sun[0], sun[1], strength=4.5 * T * sun_k, color=col, angle=.55)

@@ -21,7 +21,7 @@ PEAK = (-185, -475, 7010)
 
 POST = dict(exposure_keys=[[1, 1.9], [50, 1.0], [100, .2], [154, -.3]], h_dens=1.5e-5, h_base=4000, h_scale=1200,
             dist_fog=150000, fog_max=.9, bloom=.05, bloom_thresh=1.2, punch=1.12, sat=1.15, vignette=.22,
-            shadow_tint=(.92, .97, 1.08), high_tint=(1.05, 1.0, .94),
+            shadow_tint=(.92, .97, 1.08), high_tint_keys=[[1, [1.1, .96, .92]], [70, [1.12, .99, .86]], [154, [1.04, 1.0, .96]]],
             clouds=dict(alt=9500, cover=.45, scale=7000, stretch=3.0, wind=(160, 60), thick=2.5, amb=.9, bright=.35,
                         sun_gain=1.0, shade=3.0, far=140000))
 

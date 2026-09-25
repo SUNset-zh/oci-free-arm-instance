@@ -34,8 +34,12 @@ def spec(fine=None, mid=None, cam=(0, 0), terrace=None, mat=None):
 
 
 def get(out_dir, **kw):
+    return generate(out_dir, spec(**kw))
+
+
+def generate(out_dir, sp):
+    """按规格生成（或复用缓存的）地形。规格变了就重新生成。"""
     os.makedirs(out_dir, exist_ok=True)
-    sp = spec(**kw)
     path = os.path.join(out_dir, 'terrain_spec.json')
     cache = os.path.join(out_dir, 'terrain.npz')
     old = json.load(open(path)) if os.path.exists(path) else None

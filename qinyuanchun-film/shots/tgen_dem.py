@@ -158,6 +158,14 @@ def main(cache, spec_path):
         X, Y = np.meshgrid(np.linspace(cx - ex / 2, cx + ex / 2, nx), np.linspace(cy - ey / 2, cy + ey / 2, ny))
         H = dem.local(lon, lat, (ex, ey), (nx, ny), z, cx, cy)
         H, nbad = despike(H, L.get('despike', 45.0) * max(1.0, cell / 15.0))
+        if 'vexag' in spec:
+            # 相对局部基准面的垂直夸张（30 m 数据把刀脊抹圆了，稍微拉陡一点更接近实景观感）
+            vx = spec['vexag']
+            base = ndimage.gaussian_filter(H, max(1.0, vx['r'] / cell))
+            H = base + (H - base) * vx['k']
+        if 'sharpen' in spec:
+            sh = spec['sharpen']
+            H = H + sh['k'] * (H - ndimage.gaussian_filter(H, max(1.0, sh['r'] / cell)))
         H = (H * L.get('vexag', 1.0) + L.get('zshift', 0.0)).astype(np.float32)
         if 'peak' in spec:
             H = add_peak(H, X, Y, spec['peak'], p)

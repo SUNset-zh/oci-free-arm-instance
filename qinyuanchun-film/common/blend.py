@@ -606,7 +606,7 @@ def mat_real(name='terrain', rock=(.07, .066, .062), rock2=(.14, .128, .115), sn
 
 
 def mat_lean(name='terrain', rock=(.07, .066, .062), rock2=(.15, .135, .12), snow_col=(.88, .91, .96), ledge=.5,
-             cav_dark=.5, rock_bump=.45, snow_bump=.06, strata=1.0, wind=.6, edge=.3):
+             cav_dark=.5, rock_bump=.45, snow_bump=.06, strata=1.0, wind=.6, edge=.3, brush=0.0, brush_col=(.06, .05, .045)):
     """精简版地形材质：大尺度图案已预计算在顶点属性（snow / rockv / cav）上，
     着色器只补网格间距以下的细节：雪线碎齿、陡壁雪带、岩层明暗、一个共用的凹凸。约为 mat_real 的 1/3 开销。"""
     m, nb, out = new_material(name)
@@ -631,6 +631,17 @@ def mat_lean(name='terrain', rock=(.07, .066, .062), rock2=(.15, .135, .12), sno
     rcol = nb.mix(1.0, rcol, nb.maprange(band, -1, 1, 1 - .12 * strata, 1 + .1 * strata, 'LINEAR'), 'RGBA', 'MULTIPLY')
     rcol = nb.mix(1.0, rcol, nb.maprange(A, -6, 8, 1.25, 1 - cav_dark, 'LINEAR'), 'RGBA', 'MULTIPLY')
     scol = nb.mix(nb.maprange(A, 0, 10), snow_col, (snow_col[0] * .9, snow_col[1] * .95, snow_col[2] * 1.02))
+    if brush > 0:
+        # 雪地里的灌木丛：随机的小暗点（远看是一层灰褐色的“毛”），只长在不太陡的坡上
+        vr = nb.node('ShaderNodeTexVoronoi'); vr.feature = 'F1'; nb.link(tc, vr.inputs['Vector'])
+        vr.inputs['Scale'].default_value = 1 / .9
+        dot = nb.math('MULTIPLY', nb.maprange(vr.outputs['Distance'], .12, .32, 1, 0),
+                      nb.math('LESS_THAN', vr.outputs['Color'], brush))
+        # 灌木成片：再用一个大尺度噪声调制疏密
+        dot = nb.math('MULTIPLY', dot, nb.maprange(nb.noise(tc, 1 / 40.0, 2, .5), .35, .6))
+        dot = nb.math('MULTIPLY', dot, nb.maprange(nz, .6, .85))
+        scol_b = nb.mix(dot, scol, (*brush_col, 1))
+        scol = scol_b
     bs = nb.mix(snow, rock_bump, snow_bump, 'FLOAT')
     bump = nb.node('ShaderNodeBump'); nb.link(fine, bump.inputs['Height']); nb.link(bs, bump.inputs['Strength'])
     bump.inputs['Distance'].default_value = 1.0
@@ -652,6 +663,24 @@ def sun_color(elev_deg, altitude=3000.0, turbidity=1.0):
     ta = .08 * turbidity * (lam / .55) ** -1.3 * math.exp(-altitude / 1500.0)
     T = np.exp(-(tr + ta) * am)
     return tuple((T / T.max()).tolist()), float(T.mean())
+
+
+def world_overcast(top=(.55, .6, .68), horizon=(.8, .82, .86), ground=(.35, .36, .38), strength=1.0, name='overcast'):
+    """阴天：天顶略暗偏蓝、地平线亮白，地平线以下取地面反光色。没有直射光，一切柔和。"""
+    w = bpy.data.worlds.new(name); bpy.context.scene.world = w; w.use_nodes = True
+    nt = w.node_tree
+    for nd in list(nt.nodes): nt.nodes.remove(nd)
+    nb = NB(nt)
+    out = nb.node('ShaderNodeOutputWorld'); bg = nb.node('ShaderNodeBackground')
+    d = nb.node('ShaderNodeTexCoord').outputs['Generated']
+    sep = nb.node('ShaderNodeSeparateXYZ'); nb.link(d, sep.inputs[0])
+    z = sep.outputs['Z']
+    up = nb.mix(nb.math('POWER', nb.math('MAXIMUM', z, 0.0), .6), horizon, top)
+    col = nb.mix(nb.maprange(z, -.15, .0), ground, up)
+    nb.link(col, bg.inputs['Color']); bg.inputs['Strength'].default_value = strength
+    nb.link(bg.outputs[0], out.inputs['Surface'])
+    w.cycles.sampling_method = 'MANUAL'; w.cycles.sample_map_resolution = 256
+    return w, bg
 
 
 def world_nishita(sun_elev, sun_rot, strength=1.0, altitude=3000, air=1.0, dust=1.0, ozone=1.0, name='sky'):
