@@ -11,7 +11,10 @@
   - 多次散射：阴影里也透着一点被云自己散射过来的光；
   - 环境：天空色 × 缝隙遮蔽（近、远两个尺度），所以阴影是亮的、偏蓝的，不是灰的；
   - 逆光时的银边：视线接近太阳方向时，云缘更亮。
-云是体积，不是硬表面：近处的云按屏幕空间柔化得多一些，远处少一些。
+云是体积，不是硬表面：
+  - 近处的云按屏幕空间柔化得多一些，远处少一些；
+  - 云顶上方贴着一层絮状薄雾（密度随离云顶的高度指数衰减，按噪声成絮）：视线擦过云顶时穿过的薄雾多，
+    所以云的轮廓是虚的；镜头刚破云而出时，四周也还笼着一层云气。
 与地形合成：谁近取谁；山体刚露出云顶的那一段（高出云顶 0~mist 米）加一层渐隐的薄雾，接缝就是软的。
 """
 import math
@@ -110,37 +113,48 @@ def _cloud_h(x, y, t, q, p):
 
 
 @njit(parallel=True, cache=True, fastmath=True)
-def march(dirs, ox, oy, oz, tmax, t, q, p, sdx, sdy, sdz, shade_steps, shade_len, top):
-    """返回每个像素的命中距离（未命中为 -1）、法线、太阳可见度、缝隙遮蔽（近、远两个尺度）。"""
+def march(dirs, ox, oy, oz, tmax, t, q, p, sdx, sdy, sdz, shade_steps, shade_len, top, ww, wrho, wl):
+    """返回每个像素的命中距离（未命中为 -1）、法线、太阳可见度、缝隙遮蔽（近、远两个尺度），
+    以及视线穿过云顶絮状薄雾层的光学厚度 tau（薄雾密度 wrho·exp(-离云顶高度/ww)，按 wl 米尺度的噪声成絮）。"""
     H, W = dirs.shape[0], dirs.shape[1]
     hit = np.full((H, W), -1.0)
     nzs = np.zeros((H, W)); nxs = np.zeros((H, W)); nys = np.zeros((H, W)); vis = np.ones((H, W)); ao = np.ones((H, W))
+    tau = np.zeros((H, W))
+    top_w = top + (4.0 * ww if wrho > 0 else 0.0)
     for j in prange(H):
         for i in range(W):
             dx = dirs[j, i, 0]; dy = dirs[j, i, 1]; dz = dirs[j, i, 2]
             tt = 0.0
-            if oz > top:
+            if oz > top_w:
                 if dz >= -1e-5:
                     continue
-                tt = (top - oz) / dz
+                tt = (top_w - oz) / dz
             tlim = tmax[j, i]
             if tt > tlim:
                 continue
             found = False
             prev = tt
-            for k in range(200):
+            od = 0.0
+            for k in range(240):
                 x = ox + dx * tt; y = oy + dy * tt; z = oz + dz * tt
                 c = _cloud_h(x, y, t, q, p)
                 h = z - c
                 if h < 0:
                     found = True
                     break
-                if z > top and dz >= 0:
+                if z > top_w and dz >= 0:
                     break
                 prev = tt
-                tt += max(1.5, max(h / (abs(dz) + .6), tt * .003))
+                st = max(1.5, max(h / (abs(dz) + .6), tt * .003))
+                if wrho > 0 and h < 4.0 * ww:
+                    st = min(st, max(2.0, ww * .7 + tt * .002))
+                    rho = wrho * math.exp(-h / ww)
+                    rho *= max(0.0, .55 + 1.1 * T.perlin(x / wl + 7.7 - t * .05, y / wl - 3.3, p))
+                    od += rho * min(st, tlim - tt)
+                tt += st
                 if tt > tlim:
                     break
+            tau[j, i] = od
             if not found:
                 continue
             lo = prev; hi = tt
@@ -179,7 +193,7 @@ def march(dirs, ox, oy, oz, tmax, t, q, p, sdx, sdy, sdz, shade_steps, shade_len
                       + _cloud_h(x, y + r, t, q, p) + _cloud_h(x, y - r, t, q, p)) * .25
                 a_ += max(0.0, av - c0) / (r * .9 + 60.0)
             ao[j, i] = math.exp(-a_ * 1.2)
-    return hit, nxs, nys, nzs, vis, ao
+    return hit, nxs, nys, nzs, vis, ao, tau
 
 
 @njit(parallel=True, cache=True, fastmath=True)
@@ -201,15 +215,17 @@ def cloud_top(xs, ys, t, C):
 
 
 def render(cam, W, H, dist_terrain, t, C, sky_amb, sun_dir, sun_rgb):
-    """返回 (颜色 HxWx3 线性, 命中距离 HxW，未命中 -1)。dist_terrain：每像素到地形的距离（天空为很大）。"""
+    """返回 (颜色 HxWx3 线性, 命中距离 HxW（未命中 -1）, 絮状薄雾的透过率 HxW, 薄雾颜色 HxWx3)。
+    dist_terrain：每像素到地形的距离（天空为很大）。薄雾要叠在最终画面上（地形、天空、云都在它后面）。"""
     from post.sky import ray_dirs
     from scipy import ndimage
     d = ray_dirs(cam, W, H)
     sd = np.array(sun_dir, np.float64); sd = sd / np.linalg.norm(sd)
-    hit, nx, ny, nz, vis, ao = march(d, float(cam['loc'][0]), float(cam['loc'][1]), float(cam['loc'][2]),
-                                     np.minimum(dist_terrain, C.get('tmax', 150000.0)).astype(np.float64), float(t),
-                                     params(C), _P, sd[0], sd[1], max(sd[2], .02), int(C.get('shade_steps', 8)),
-                                     C.get('shade_len', 900.0), top_of(C))
+    hit, nx, ny, nz, vis, ao, tau = march(d, float(cam['loc'][0]), float(cam['loc'][1]), float(cam['loc'][2]),
+                                          np.minimum(dist_terrain, C.get('tmax', 150000.0)).astype(np.float64), float(t),
+                                          params(C), _P, sd[0], sd[1], max(sd[2], .02), int(C.get('shade_steps', 8)),
+                                          C.get('shade_len', 900.0), top_of(C), C.get('wisp_w', 25.0),
+                                          C.get('wisp_rho', 0.0), C.get('wisp_l', 260.0))
     wrap = C.get('wrap', .5)
     ndl = np.clip((nx * sd[0] + ny * sd[1] + nz * sd[2] + wrap) / (1 + wrap), 0, 1)
     cos_v = (d * sd).sum(-1)
@@ -234,4 +250,9 @@ def render(cam, W, H, dist_terrain, t, C, sky_amb, sun_dir, sun_rgb):
             k = np.clip(1 - (hit - C.get('near_d0', 600.0)) / C.get('near_d1', 2500.0), 0, 1)[..., None]
             out = out * (1 - k) + blur(near) * k
         col = np.where(m[..., None] > 0, out, col)
-    return col.astype(np.float32), hit.astype(np.float32)
+    # 絮状薄雾：颜色 = 天光 + 阳光（朝太阳方向的前向散射更亮）
+    trans = np.exp(-tau)
+    fwd = 1.0 + C.get('wisp_fwd', 1.5) * np.clip(cos_v, 0, 1) ** 6
+    wcol = (sun_rgb[None, None, :] * (C.get('sun_k', 1.0) * .55 * fwd)[..., None]
+            + sky_amb * C.get('amb', 1.0)) * np.array(C.get('albedo', (.95, .96, 1.0)))
+    return col.astype(np.float32), hit.astype(np.float32), trans.astype(np.float32), wcol.astype(np.float32)

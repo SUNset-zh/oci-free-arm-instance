@@ -156,7 +156,7 @@ def process(exr_path, cam, P):
         srgb = np.array(SK.sun_rgb_at(el, Cs.get('base', 4800.0)), np.float64) * Cs.get('sun_gain', 3.0)
         amb = np.array(Cs.get('amb_rgb', (.25, .32, .45)), np.float64)
         dterr = np.where(a > .5, dist, 1e9)
-        ccol, chit = CS.render(cam, W, H, dterr, P.get('time', 0.0), Cs, amb, sun['dir'], srgb)
+        ccol, chit, ctrans, cwisp = CS.render(cam, W, H, dterr, P.get('time', 0.0), Cs, amb, sun['dir'], srgb)
         m = chit > 0
         if Cs.get('mist', 0) > 0:
             dvec = __import__('post.sky', fromlist=['ray_dirs']).ray_dirs(cam, W, H)
@@ -219,6 +219,9 @@ def process(exr_path, cam, P):
         env = env + vis * (disc[..., None] * SDp.get('radiance', 60.0) + halo[..., None]) * scol
         fogged = fogged + (a[..., None]) * (halo[..., None] * scol) * SDp.get('veil', .35)
     out = fogged * a[..., None] + env
+    if P.get('cloudsea'):
+        # 云顶的絮状薄雾（地形、天空、云都在它后面）
+        out = out * ctrans[..., None] + cwisp * (1 - ctrans[..., None])
     # 镜头在云里：按镜头低于云顶的深度整体罩上云雾（穿云而出时由白到清）
     if P.get('cloudsea'):
         Cs = P['cloudsea']
