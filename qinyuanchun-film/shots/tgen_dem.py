@@ -176,6 +176,17 @@ def main(cache, spec_path):
             d = L['detail']
             drops = d.get('drops', d.get('drops_per_cell', 0) * nx * ny)
             H = amplify(H, cell, p, d.get('noise', 2.5), drops, d.get('talus', 42.0), seed=li + 1)
+        if 'carve' in spec:
+            # 河道：离中线 width 米以内压到水面以下（河岸自然形成岸线）
+            from scipy.spatial import cKDTree
+            cv = spec['carve']
+            line = np.load(cv['line'])
+            dd, ii = cKDTree(line[:, :2]).query(np.stack([X.ravel(), Y.ravel()], 1), distance_upper_bound=cv['width'] * 3)
+            dd = dd.reshape(H.shape); ii = np.minimum(ii.reshape(H.shape), len(line) - 1)
+            zl = line[ii, 2] - cv.get('depth', 1.5)
+            w = np.clip(1 - (dd - cv['width']) / cv.get('soft', 60.0), 0, 1)
+            w = w * w * (3 - 2 * w)
+            H = np.where(w > 0, np.minimum(H, zl * w + H * (1 - w) + 0 * w), H).astype(np.float32)
         H = dem.curve(H, (ex, ey), cx, cy, ox, oy)
         sn = L.get('snow', {})
         Hs, D = T.snow_layer(H, cell, depth=sn.get('depth', 8.0), lo=sn.get('lo', .3), hi=sn.get('hi', .55),

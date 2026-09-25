@@ -606,7 +606,8 @@ def mat_real(name='terrain', rock=(.07, .066, .062), rock2=(.14, .128, .115), sn
 
 
 def mat_lean(name='terrain', rock=(.07, .066, .062), rock2=(.15, .135, .12), snow_col=(.88, .91, .96), ledge=.5,
-             cav_dark=.5, rock_bump=.45, snow_bump=.06, strata=1.0, wind=.6, edge=.3, brush=0.0, brush_col=(.06, .05, .045)):
+             cav_dark=.5, rock_bump=.45, snow_bump=.06, strata=1.0, wind=.6, edge=.3, brush=0.0, brush_col=(.06, .05, .045),
+             contours=None):
     """精简版地形材质：大尺度图案已预计算在顶点属性（snow / rockv / cav）上，
     着色器只补网格间距以下的细节：雪线碎齿、陡壁雪带、岩层明暗、一个共用的凹凸。约为 mat_real 的 1/3 开销。"""
     m, nb, out = new_material(name)
@@ -642,6 +643,15 @@ def mat_lean(name='terrain', rock=(.07, .066, .062), rock2=(.15, .135, .12), sno
         dot = nb.math('MULTIPLY', dot, nb.maprange(nz, .6, .85))
         scol_b = nb.mix(dot, scol, (*brush_col, 1))
         scol = scol_b
+    if contours:
+        # 黄土梯田：沿等高线一圈圈的田坎，坎上雪薄露土——雪地里一道道细线（只在缓坡到中坡上）
+        zs2 = nb.node('ShaderNodeSeparateXYZ'); nb.link(tc, zs2.inputs[0])
+        ph = nb.math('ADD', nb.math('MULTIPLY', zs2.outputs['Z'], 2 * math.pi / contours.get('step', 5.0)),
+                     nb.math('MULTIPLY', nb.noise(tc, 1 / 120.0, 2, .5), 6.0))
+        line = nb.maprange(nb.math('SINE', ph), 1 - contours.get('width', .12), 1.0)
+        line = nb.math('MULTIPLY', line, nb.maprange(nz, contours.get('nz_hi', .985), contours.get('nz_mid', .93)))
+        line = nb.math('MULTIPLY', line, nb.maprange(nz, contours.get('nz_lo', .82), contours.get('nz_lo2', .88)))
+        scol = nb.mix(nb.math('MULTIPLY', line, contours.get('strength', .75)), scol, (*contours.get('color', (.3, .24, .17)), 1))
     bs = nb.mix(snow, rock_bump, snow_bump, 'FLOAT')
     bump = nb.node('ShaderNodeBump'); nb.link(fine, bump.inputs['Height']); nb.link(bs, bump.inputs['Strength'])
     bump.inputs['Distance'].default_value = 1.0

@@ -206,6 +206,15 @@ def process(exr_path, cam, P):
         disc = np.clip((r0 * 1.15 - ang) / (r0 * .3), 0, 1)
         halo = np.exp(-ang / SDp.get('halo_w', 2.5)) * SDp.get('halo', .6) + np.exp(-ang / 12.0) * SDp.get('glow', .25)
         vis = (1 - a)[..., None]
+        # 太阳被山体挡住（或已落到地平线下）时，光晕随之消失
+        sd_el = math.degrees(math.asin(max(-1, min(1, sd[2]))))
+        occl = 1.0 - float(np.clip((ang < r0 * 1.2)[a > .5].mean() if (ang < r0 * 1.2).any() else 0.0, 0, 1))
+        pix = np.argwhere(ang < r0 * 1.2)
+        if len(pix):
+            occl = 1.0 - float((a[pix[:, 0], pix[:, 1]] > .5).mean())
+        else:
+            occl = float(np.clip((sd_el + .6) / .6, 0, 1))
+        halo = halo * occl
         scol = np.array(SDp.get('color', (1.0, .8, .55)), np.float32)
         env = env + vis * (disc[..., None] * SDp.get('radiance', 60.0) + halo[..., None]) * scol
         fogged = fogged + (a[..., None]) * (halo[..., None] * scol) * SDp.get('veil', .35)

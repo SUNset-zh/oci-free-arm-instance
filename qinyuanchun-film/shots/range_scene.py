@@ -10,8 +10,15 @@ def build(d, mat_kw=None, sun=(3.0, 118.0), alt=4500.0, sky_strength=.07, dust=.
     mat = B.mat_lean(**dict(dict(ledge=.25), **(mat_kw or {})))
     B.load_levels(d, mat)
     if overcast is not None:
-        w, bg = B.world_overcast(**overcast)
-        return dict(ter=B.Terrain(d), sky=None, bg=bg, sun=None, alt=alt, sun_k=0, mat=mat)
+        oc = dict(overcast)
+        soft = oc.pop('soft_sun', None)
+        w, bg = B.world_overcast(**oc)
+        lamp = None
+        if soft:
+            # 薄云后的太阳：很大的光源角 → 极软的影子，只把地形起伏勾出来
+            lamp = B.add_sun(soft['el'], soft['az'], strength=soft.get('energy', .6), color=soft.get('color', (1, .97, .92)),
+                             angle=soft.get('angle', 12.0))
+        return dict(ter=B.Terrain(d), sky=None, bg=bg, sun=lamp, alt=alt, sun_k=0, mat=mat)
     w, sky, bg = B.world_nishita(sun[0], sun[1], strength=sky_strength, altitude=alt, dust=dust, ozone=ozone)
     col, T = B.sun_color(sun[0], alt)
     lamp = B.add_sun(sun[0], sun[1], strength=4.5 * T * sun_k, color=col, angle=.55)
