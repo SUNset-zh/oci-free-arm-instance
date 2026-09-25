@@ -26,8 +26,9 @@ LINE = os.path.join(HERE, 'data', 'yellowriver_center.npy')
 POST = dict(exposure_keys=[[1, -.1], [125, -.15]], h_dens=2e-5, h_base=560, h_scale=260, dist_fog=45000,
             fog_max=.95, fog_color=(.78, .8, .84), fog_color_mix=.6, bloom=.03, bloom_thresh=1.5, punch=1.08, sat=.95,
             vignette=.22, shadow_tint=(.95, .98, 1.04), high_tint=(1.0, 1.0, 1.0),
+            # 镜头最快约 170 m/s：雪场随镜头平移、短快门（同 S1）
             snow=dict(n=60000, L=30.0, wind=(1.2, .5), fall=1.3, sway=.3, size=.016, focus=3000.0, coc=26.0,
-                      bright=.7, near=.25, color=(.5, .52, .56), mode='over', seed=9))
+                      bright=.7, near=2.0, color=(.5, .52, .56), mode='over', seed=9, follow=.9, shutter_k=.3))
 
 
 def spec():
