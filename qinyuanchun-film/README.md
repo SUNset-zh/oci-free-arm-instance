@@ -27,12 +27,19 @@ AWS Open Data 的 Terrarium 瓦片）上用 Blender Cycles 渲染，再用 numpy
   `beacon.py`、`riders.py`、`trees.py` 是长城、河面冰冻、烽火台、骑手与雕等资产
 - `post/composite.py`：后期（线性光）：高度雾/大气透视、卷云层（`sky.py`）、光线步进云海（`cloudsea.py`）、
   三维飘雪（`snow.py`）、马蹄雪粉（`spray.py`）、太阳光晕、辉光、AgX、调色
+- `post/cloudsea.py`：云海是后期里逐像素光线步进出来的：平缓起伏的“海面”上成簇的积云团（大、中、小三层圆顶，
+  用平滑最大值连成圆角，没有折痕），云顶贴着一层絮状薄雾，视线擦过云顶时轮廓是虚的；镜头穿云时按视线在云里
+  走过的距离起雾，所以破云而出时是天空先从上方透出来
 - `post/s0_title.py`：片头（纯后期：雪花贴图 + 按弥散圆的圆盘虚化 + 标题）
 - `post/grade_shot.py`：逐帧后期并放大到 1080×1920
 - `audio/narrate.py`：朗诵（sherpa-onnx Kokoro 多语种模型，逐句合成，用 paraformer 识别校验）
 - `audio/score.py`：配乐（MusyngKite / FluidR3 采样乐器排谱、卷积混响、人声下压低、-16 LUFS）
 - `assemble.py`：接片（镜头间溶解、片尾字、细颗粒）并编码
 - `build.sh`：整条流水线
+
+## 成片
+
+`release/qinyuanchun_xue_film_1080x1920.mp4`（H.264 + AAC，60 秒，竖屏 1080×1920，适合手机播放）
 
 ## 说明
 

@@ -3,6 +3,7 @@
 与配乐一起编码成 H.264。
 
     python3 assemble.py 镜头根目录 配乐.wav 输出.mp4 [--crf 16] [--preview 秒起,秒止] [--bitrate 3900k]
+    python3 assemble.py --share 母版.mp4 分享版.mp4 [视频码率 音频码率]     （两遍编码，60 秒约 28 MB）
 
 时间线（秒）：每个镜头的起点与时长对应朗诵分句；渲染时两头都多留了“把手”，用于溶解。"""
 import os
@@ -134,8 +135,27 @@ def frame(root, k, rng):
     return (np.clip(img, 0, 1) * 255 + .5).astype(np.uint8)
 
 
+def share(master, out, vbr='3800k', abr='192k'):
+    """从母版两遍编码出适合手机分享的小文件（60 秒约 28 MB）。"""
+    tmp = os.path.splitext(out)[0] + '_2pass'
+    common = ['-c:v', 'libx264', '-preset', 'veryslow', '-tune', 'film', '-profile:v', 'high', '-level', '4.1',
+              '-pix_fmt', 'yuv420p', '-b:v', vbr, '-maxrate', '6M', '-bufsize', '8M',
+              '-x264-params', 'aq-mode=3:aq-strength=0.9', '-passlogfile', tmp]
+    subprocess.run([FF, '-y', '-v', 'error', '-i', master] + common + ['-pass', '1', '-an', '-f', 'mp4', os.devnull],
+                   check=True)
+    subprocess.run([FF, '-y', '-v', 'error', '-i', master] + common +
+                   ['-pass', '2', '-c:a', 'aac', '-b:a', abr, '-movflags', '+faststart', out], check=True)
+    for f in os.listdir(os.path.dirname(os.path.abspath(out))):
+        if f.startswith(os.path.basename(tmp)):
+            os.remove(os.path.join(os.path.dirname(os.path.abspath(out)), f))
+    print('->', out, os.path.getsize(out) / 2 ** 20, 'MiB')
+
+
 def main():
     a = sys.argv[1:]
+    if a[0] == '--share':
+        share(a[1], a[2], *a[3:5])
+        return
     root, wav, out = a[0], a[1], a[2]
     opt = lambda k, d=None: a[a.index(k) + 1] if k in a else d
     t0, t1 = 0.0, TOTAL

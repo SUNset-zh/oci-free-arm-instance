@@ -34,6 +34,7 @@ for spec in s1b:s1_bluehour s2:s2_greatwall s3:s3_river s4:s4_ridges s5:s5_sunri
   python3 post/grade_shot.py "$S/$d"
 done
 
-# 4. 接片：母版，以及适合手机分享的小文件
-python3 assemble.py "$S" "$S/score.wav" "$S/qinyuanchun_master.mp4" --crf 16
-python3 assemble.py "$S" "$S/score.wav" "$S/qinyuanchun.mp4" --bitrate 3900k
+# 4. 接片：母版，再两遍编码出适合手机分享的小文件
+python3 assemble.py "$S" "$S/score.wav" "$S/qinyuanchun_master.mp4" --crf 14
+mkdir -p release
+python3 assemble.py --share "$S/qinyuanchun_master.mp4" release/qinyuanchun_xue_film_1080x1920.mp4
