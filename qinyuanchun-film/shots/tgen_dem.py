@@ -163,6 +163,9 @@ def main(cache, spec_path):
             vx = spec['vexag']
             base = ndimage.gaussian_filter(H, max(1.0, vx['r'] / cell))
             H = base + (H - base) * vx['k']
+        if 'smooth' in spec:
+            # 草原的 SRTM 有几米的噪点（草丛/测量噪声），先抹平再加柔和的微起伏
+            H = ndimage.gaussian_filter(H, max(1.0, spec['smooth'] / cell))
         if 'sharpen' in spec:
             sh = spec['sharpen']
             H = H + sh['k'] * (H - ndimage.gaussian_filter(H, max(1.0, sh['r'] / cell)))

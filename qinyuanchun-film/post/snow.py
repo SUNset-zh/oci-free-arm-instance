@@ -32,7 +32,7 @@ def positions(p0, ph, t, cam_pos, L, wind, fall, sway):
 
 
 @njit(cache=True)
-def _splat(buf, depth, xs, ys, zs, x2, y2, rad, inten, W, H):
+def _splat(buf, depth, xs, ys, zs, x2, y2, rad, inten, W, H, soft=0):
     for k in range(xs.shape[0]):
         r = rad[k]
         # 沿运动方向分段画（运动模糊）
@@ -52,7 +52,7 @@ def _splat(buf, depth, xs, ys, zs, x2, y2, rad, inten, W, H):
                     d2 = ((xx + .5 - cx) ** 2 + (yy + .5 - cy) ** 2) * inv
                     if d2 < 1.0 and zs[k] < depth[yy, xx]:
                         # 焦外光斑：边缘略亮的圆盘（接近真实镜头的光斑），焦内：高斯点
-                        wgt = (1.0 - d2) ** .35 if r > 2.5 else math.exp(-3.0 * d2)
+                        wgt = (1.0 - d2) ** .35 if (r > 2.5 and soft == 0) else math.exp(-3.0 * d2)
                         buf[yy, xx] += a * wgt
 
 

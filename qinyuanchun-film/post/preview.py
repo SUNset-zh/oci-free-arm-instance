@@ -10,6 +10,8 @@ P = json.load(open(os.path.join(d, 'post.json')))
 if '--set' in sys.argv:
     P.update(json.loads(sys.argv[sys.argv.index('--set') + 1]))
 cams = json.load(open(os.path.join(d, 'camera.json')))['frames']
+if P.get('spray') and os.path.exists(os.path.join(d, 'horses.json')):
+    P['spray']['tracks'] = json.load(open(os.path.join(d, 'horses.json')))
 for f in frames:
     Pf = C.params_at(P, f); Pf.setdefault('time', f / 24.0)
     img = C.process(os.path.join(d, 'exr', f'f{f:04d}.exr'), C.frame_cam(cams, f), Pf)

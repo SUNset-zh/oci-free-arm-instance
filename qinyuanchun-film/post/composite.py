@@ -243,6 +243,12 @@ def process(exr_path, cam, P):
             out = out * (1 - al) + sc_ * al
         else:
             out = out + sb[..., None] * sc_
+    if P.get('spray') and P['spray'].get('tracks'):
+        from post import spray as SPR
+        Sp = P['spray']
+        sb = SPR.render(cam, W, H, np.where(a > .5, dist, 1e9), P.get('time', 0.0), Sp)
+        al = np.clip(sb, 0, 1)[..., None]
+        out = out * (1 - al) + np.array(Sp.get('color', (.6, .55, .55)), np.float32)[None, None, :] * al
     if P.get('bloom', .06) > 0:
         out = bloom(out, P.get('bloom_thresh', 1.0), P.get('bloom', .06))
     disp = agx(out, P.get('exposure', 0.0), P.get('punch', 1.08), P.get('sat', 1.05))
