@@ -112,6 +112,7 @@ function begin() {
 playBtn.addEventListener('click', begin);
 
 function play() {
+  if (clock.t >= DURATION - 0.05) clock.t = 0; // replay from the top
   clock.playing = true;
   clock.last = performance.now();
   score?.seek(clock.t, true);
@@ -172,6 +173,12 @@ function pokeUI() {
   uiTimer = setTimeout(() => { ui.classList.remove('show'); if (clock.playing) document.body.classList.add('hidecursor'); }, 1800);
 }
 window.addEventListener('mousemove', pokeUI);
+// Tap / click the picture to pause or resume (phones have no keyboard).
+canvas.addEventListener('click', () => {
+  if (!director || !startEl.classList.contains('gone')) return;
+  if (clock.playing) pause(); else play();
+  pokeUI();
+});
 document.getElementById('track').addEventListener('click', (e) => {
   const r = e.currentTarget.getBoundingClientRect();
   seek(((e.clientX - r.left) / r.width) * DURATION);

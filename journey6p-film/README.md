@@ -67,10 +67,13 @@ default the quality adapts to hold roughly 60 fps.
    turns **ON**, the channel lights, and they flow.
 9. **Be the electron (40.5–44 s).** *Now, you are an electron.* We drop into the
    fin and ride the current under the gate, through the channel tunnel.
-10. **The crystal (44–48.5 s).** The fin's walls resolve into atoms. We glide
+10. **The crystal (44–49 s).** The fin's walls resolve into atoms. We glide
     along a real ⟨110⟩ channel of diamond-cubic silicon, which is the direction
-    electrons travel in a FinFET on a (001) wafer. *From meters to nanometers.*
-11. **One atom (48.5–51.8 s).** The music drops to near silence. One surface atom
+    electrons travel in a FinFET on a (001) wafer. Then we rise up an open
+    [001] shaft and come out above the crystal surface. *From meters to
+    nanometers.* The route is collision-free, checked numerically against every
+    atom and bond.
+11. **One atom (49–51.8 s).** The music drops to near silence. One surface atom
     dissolves into its electron cloud: four sp³ lobes pointing toward its bond
     partners, and a nucleus. *One silicon atom.*
 12. **Hyper zoom-out (51.8–58.8 s).** One continuous pull-back through ten
