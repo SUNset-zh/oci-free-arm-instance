@@ -1,0 +1,18 @@
+{
+  "name": "journey6p-film",
+  "private": true,
+  "version": "1.0.0",
+  "description": "A procedural, single-take cinematic journey from a car on the road down to a single silicon atom inside Horizon Robotics' Journey 6P SoC — and back.",
+  "type": "module",
+  "scripts": {
+    "start": "node tools/serve.mjs",
+    "build": "node tools/build.mjs",
+    "shots": "node tools/shots.mjs",
+    "capture": "node tools/capture.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "playwright": "^1.56.1",
+    "three": "0.186.1"
+  }
+}

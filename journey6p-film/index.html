@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Journey 6P — Meters to Atoms</title>
+<meta name="description" content="A procedural single-take 3D film: from a car on the road down to one silicon atom inside Horizon Robotics' Journey 6P, and back.">
+<link rel="stylesheet" href="./src/style.css">
+<script type="importmap">
+{ "imports": { "three": "./vendor/three/three.module.js" } }
+</script>
+</head>
+<body>
+<div id="stage">
+  <canvas id="c"></canvas>
+  <div id="start" class="start">
+    <div class="start-inner">
+      <div class="kicker">A SINGLE-TAKE JOURNEY · 一镜到底</div>
+      <div class="title">FROM METERS<br>TO ATOMS</div>
+      <div class="sub">Inside Horizon Robotics Journey 6P · 走进征程 6P</div>
+      <button id="play" aria-label="Play"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="19"/><path d="M16 13 L28 20 L16 27 Z"/></svg><span id="playlabel">LOADING</span></button>
+      <div class="loadbar"><i id="loadfill"></i></div>
+      <div class="hint">Sound on · F fullscreen · Space pause · ← → seek</div>
+    </div>
+  </div>
+  <div id="ui" class="ui">
+    <div class="track" id="track"><i id="trackfill"></i></div>
+    <div class="time" id="time">0:00</div>
+  </div>
+  <div id="debug" class="debug"></div>
+</div>
+<script>window.addEventListener('error', function (e) { var l = document.getElementById('playlabel'); if (l) l.textContent = 'ERROR · ' + (e.message || 'script failed'); });</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
