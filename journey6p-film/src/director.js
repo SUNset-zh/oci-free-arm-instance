@@ -130,8 +130,8 @@ export class Director {
     // D+E+F. Highway -> hero reveal -> exploded view -> dive to die (board frame).
     const boardCam = new KeyCam('board', [
       { t: 10.38, p: [143, 0.6, -1.2], l: [100, 0.6, -3.5], fov: 44, ap: 0.02 },
-      { t: 10.8, p: [133, 2.6, -8.25], l: [80, 1.6, -6.5] },
-      { t: 11.35, p: [108, 2.3, -8.25], l: [60, 1.0, -4] },
+      { t: 10.62, p: [133, 2.6, -8.25], l: [80, 1.6, -6.5] },
+      { t: 11.15, p: [108, 2.3, -8.25], l: [60, 1.0, -4] },
       { t: 12.25, p: [86, 1.55, -3.0], l: [40, 0.7, 0], ap: 0.035 },
       { t: 13.25, p: [58, 1.25, 0.2], l: [15, 1.8, 0], fov: 42 },
       { t: 14.05, p: [37, 3.3, 0], l: [0, 3.2, 0] },
@@ -206,12 +206,16 @@ export class Director {
     // L. Lattice glide -> single atom (lat frame, Å).
     const lk = [nanoCam.keyAt(43.2, 'lat'), nanoCam.keyAt(43.9, 'lat')];
     lk.push(
-      { t: 45.2, p: [-52, ch.y, ch.z], l: [60, ch.y, ch.z], fov: 58, ap: 0.035 },
-      { t: 46.6, p: [-33, ch.y, ch.z], l: [60, ch.y + 1, ch.z] },
-      { t: 47.7, p: [-19, ch.y + 2.2, ch.z], l: [0, 0, 0], fov: 52 },
-      { t: 48.6, p: [-9.5, 3.6, 3.2], l: [0, 0, 0], fov: 46, ap: 0.05 },
-      { t: 49.6, p: [-4.6, 3.3, 2.8], l: [0, 0, 0], fov: 44 },
-      { t: 51.8, p: [-3.6, 2.35, 1.6], l: [0, 0, 0], fov: 42, ap: 0.06 },
+      { t: 45.2, p: [-52, ch.y, ch.z], l: [60, ch.y, ch.z], fov: 58, ap: 0.035, near: 0.08 },
+      { t: 46.5, p: [-30, ch.y, ch.z + 0.3], l: [60, ch.y + 2, ch.z] },
+      { t: 47.35, p: [-15.6, ch.y + 0.4, ch.z + 0.9], l: [0, ch.y + 6, 1], fov: 56 },
+      // up an open [001] shaft like an elevator, out through the surface
+      { t: 47.85, p: [-14.4, -8.6, 1.0], l: [0, -3, 1] },
+      { t: 48.3, p: [-14.4, -4.4, 1.0], l: [0, 0, 1] },
+      { t: 48.75, p: [-14.4, -0.3, 1.0], l: [0, 1, 0.8], fov: 50 },
+      { t: 49.2, p: [-12.6, 3.3, 1.3], l: [0, 0, 0], fov: 48, ap: 0.05 },
+      { t: 50.0, p: [-5.6, 3.6, 2.5], l: [0, 0, 0], fov: 44 },
+      { t: 51.8, p: [-3.6, 2.35, 1.6], l: [0, 0, 0], fov: 42, ap: 0.06, near: 0.05 },
     );
     const latCam = new KeyCam('lat', lk, { endZero: false });
     latCam.t0 = 43.9;
@@ -309,8 +313,8 @@ export class Director {
       iso: keys(t, [[0, 0], [36.6, 0], [37.3, 1], [44.2, 1], [44.8, 0]]),
       electrons: keys(t, [[0, 0], [37.1, 0], [37.8, 1], [44.4, 1], [44.9, 0], [53.4, 0]]),
       channel: 1,
-      latElectrons: keys(t, [[0, 0], [43.4, 0], [43.9, 1], [47.6, 1], [48.6, 0]]),
-      atomCloud: keys(t, [[0, 0], [48.2, 0], [49.3, 1, 'inOut2'], [52.3, 1], [53.1, 0]]),
+      latElectrons: keys(t, [[0, 0], [43.4, 0], [43.9, 1], [47.4, 1], [48.3, 0]]),
+      atomCloud: keys(t, [[0, 0], [48.9, 0], [50.0, 1, 'inOut2'], [52.3, 1], [53.1, 0]]),
       latAlpha: keys(t, [[0, 1], [43.4, 0.3], [45.6, 1, 'inOut2']]),
       metal: keys(t, [[0, 1], [34.0, 1], [34.9, 0, 'inOut2'], [53.3, 0], [53.9, 1]]),
       consoleLight: keys(t, [[0, 0], [6.4, 0], [7.8, 1], [9.6, 1], [9.8, 0], [56.5, 0], [57.0, 0.7], [58.6, 0]]),
@@ -343,7 +347,7 @@ export class Director {
       { t0: 34.35, t1: 36.45, en: 'Billions of switches.', zh: '数十亿个开关。' },
       { t0: 40.55, t1: 42.6, en: 'Now, you are an electron.', zh: '现在，你是一个电子。' },
       { t0: 44.6, t1: 47.1, en: 'From meters to nanometers.', zh: '从米，到纳米。' },
-      { t0: 49.35, t1: 51.6, en: 'One silicon atom.', zh: '一个硅原子。', style: 'small', fi: 0.8,
+      { t0: 49.9, t1: 51.7, en: 'One silicon atom.', zh: '一个硅原子。', style: 'small', fi: 0.8,
         extra: [{ cls: 'meta', text: '' }] },
       { t0: 62.5, t1: 65.3, en: 'From silicon to intelligence.', zh: '从硅，到智能。', style: 'end', pos: 'mid', fi: 0.8, fo: 0.7 },
       { t0: 65.5, t1: 68.3, en: 'JOURNEY 6P', zh: '征程 6P', style: 'brand', pos: 'mid', fi: 0.9, fo: 0.8,
@@ -377,7 +381,7 @@ export class Director {
       hits: [2.0, 9.45, 10.38, 14.95, 23.9, 29.7, 43.8, 58.8],
       whoosh: [[4.8, 6.4], [9.3, 10.4], [10.38, 11.2], [23.2, 24.3], [29.2, 30.4], [40.3, 41.4]],
       tick: [0.4, 1.0, 1.6],
-      quiet: [48.4, 51.8],
+      quiet: [48.9, 51.8],
       switchOn: 38.9,
       laneChange: LANE_CHANGE,
       bands: this.zoBand.map((b) => b.t1),
