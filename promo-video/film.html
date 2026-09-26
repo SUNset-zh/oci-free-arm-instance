@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Q1 Launch Film</title>
+<!--
+  30 秒产品宣传片（发布会风格）。
+  整个画面由 render(t) 按时间确定性地绘制，render.js 逐帧截图并编码成视频。
+  在浏览器里直接打开本文件可预览（空格 暂停/播放，← → 逐秒跳转）。
+-->
+<style>
+  :root {
+    --bg: #000;
+    --ink: #f5f5f7;
+    --muted: #86868b;
+    --body-a: #3a3c41;
+    --body-b: #16171a;
+    --key: #1d1f23;
+    --key-hi: #2c2f34;
+    --wechat: #07c160;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg); overflow: hidden; }
+  body { font-family: "Inter", "Noto Sans SC", "PingFang SC", sans-serif; color: var(--ink);
+         -webkit-font-smoothing: antialiased; }
+
+  #stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #000; }
+  #ambient { position: absolute; inset: 0; }
+  #cam { position: absolute; inset: 0; perspective: 2600px; perspective-origin: 50% 50%; }
+
+  /* ---------- 手机 ---------- */
+  #phone { position: absolute; left: 50%; top: 50%; width: 440px; height: 654px;
+           margin: -327px 0 0 -220px; transform-style: preserve-3d; will-change: transform; }
+  .edge { position: absolute; inset: 0; border-radius: 60px; background: #0d0e10; }
+  .edge.rim { background: linear-gradient(90deg, #5b5e64, #1b1c1f 30%, #0f1012 70%, #4a4d52); }
+  .face { position: absolute; inset: 0; border-radius: 60px; overflow: hidden;
+          background: linear-gradient(160deg, var(--body-a), var(--body-b) 55%, #0c0d0f);
+          box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.14), inset 0 2px 1px rgba(255,255,255,.18),
+                      inset 0 -3px 6px rgba(0,0,0,.6); }
+  .sheen { position: absolute; inset: -40%; pointer-events: none; mix-blend-mode: screen;
+           background: linear-gradient(105deg, transparent 38%, rgba(255,255,255,.16) 48%, rgba(255,255,255,.05) 52%, transparent 62%); }
+  .screen { position: absolute; left: 16px; top: 16px; width: 408px; height: 408px; border-radius: 46px;
+            overflow: hidden; background: #000; box-shadow: 0 0 0 2px #050506; }
+  .scr { position: absolute; inset: 0; opacity: 0; }
+  .punch { position: absolute; left: 22px; top: 20px; width: 22px; height: 22px; border-radius: 50%;
+           background: radial-gradient(circle at 40% 38%, #3c4d6a 0 2.5px, #0b0c10 3.5px 6px, #000 7px);
+           box-shadow: 0 0 0 1.5px #111; z-index: 20; }
+  .glass { position: absolute; inset: 0; z-index: 19; pointer-events: none;
+           background: linear-gradient(125deg, rgba(255,255,255,.10), transparent 32%, transparent 70%, rgba(255,255,255,.04)); }
+  .glow { position: absolute; inset: 0; z-index: 18; border-radius: 46px; padding: 5px; opacity: 0;
+          background: conic-gradient(from var(--a, 0deg), #ff6ec7, #7a5cff, #2fb8ff, #3cf2c0, #ffd35c, #ff7a59, #ff6ec7);
+          -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          -webkit-mask-composite: xor; mask-composite: exclude; filter: blur(3px); }
+
+  .kbd { position: absolute; left: 20px; right: 20px; top: 440px; bottom: 22px;
+         display: flex; flex-direction: column; gap: 7px; }
+  .row { display: flex; gap: 5px; flex: 1; }
+  .key { flex: 1; position: relative; border-radius: 8px 8px 10px 10px;
+         background: linear-gradient(180deg, var(--key-hi), var(--key) 45%, #15161a);
+         box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 2px 0 #08090a, 0 3px 4px rgba(0,0,0,.5);
+         display: flex; align-items: center; justify-content: center;
+         font: 500 16px/1 "Inter", sans-serif; color: #e9e9ec; }
+  .key small { position: absolute; left: 5px; top: 3px; font-size: 8px; color: #8b8d93; font-weight: 500; }
+  .key.fn { font-size: 11px; color: #c9cad0; }
+  .key.w3 { flex: 3.2; }
+  .key .lit { position: absolute; inset: 0; border-radius: inherit; opacity: 0;
+              background: radial-gradient(ellipse at 50% 55%, rgba(170,210,255,.55), rgba(120,170,255,.12) 60%, transparent 75%);
+              box-shadow: 0 0 14px rgba(140,190,255,.7); }
+  .key .lbl { position: relative; }
+  .mic { position: absolute; bottom: 9px; left: 50%; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: #050505; }
+
+  #shadow { position: absolute; left: 50%; top: 50%; width: 520px; height: 90px; margin-left: -260px;
+            border-radius: 50%; background: radial-gradient(closest-side, rgba(0,0,0,.9), transparent); }
+
+  /* ---------- 屏幕内容 ---------- */
+  .status { position: absolute; top: 20px; left: 56px; right: 26px; height: 22px; display: flex;
+            align-items: center; justify-content: space-between; font: 600 13px/1 "Inter"; color: #fff; z-index: 5; }
+  .batt { width: 24px; height: 11px; border-radius: 3.5px; border: 1.3px solid rgba(255,255,255,.6); padding: 1.3px; position: relative; }
+  .batt::after { content: ""; position: absolute; right: -4px; top: 3px; width: 2px; height: 3.5px; border-radius: 1px; background: rgba(255,255,255,.6); }
+  .batt i { display: block; height: 100%; width: 80%; background: #fff; border-radius: 1.5px; }
+  .sig { display: flex; gap: 2px; align-items: flex-end; margin-right: 7px; }
+  .sig i { width: 3px; background: #fff; border-radius: 1px; }
+
+  #s-home { background:
+      radial-gradient(120% 90% at 85% 10%, #c6a8ff 0, transparent 55%),
+      radial-gradient(120% 90% at 10% 100%, #1d4dff 0, transparent 60%),
+      linear-gradient(160deg, #a58cf5, #5563f0 45%, #2037c9); }
+  .wave { position: absolute; inset: 0; }
+  .clock { position: absolute; top: 64px; width: 100%; text-align: center; }
+  .clock .d { font: 500 14px/1 "Noto Sans SC"; opacity: .9; }
+  .clock .t { font: 300 76px/1 "Inter"; letter-spacing: -2px; margin-top: 8px; }
+  .apps { position: absolute; left: 22px; right: 22px; bottom: 22px; display: grid;
+          grid-template-columns: repeat(5, 1fr); row-gap: 14px; justify-items: center; }
+  .app { display: flex; flex-direction: column; align-items: center; gap: 5px; font: 500 10px/1 "Noto Sans SC"; }
+  .ico { width: 54px; height: 54px; border-radius: 15px; display: flex; align-items: center; justify-content: center;
+         box-shadow: 0 4px 10px rgba(0,0,0,.18); }
+  .ico svg { width: 30px; height: 30px; }
+  .dock { position: absolute; left: 14px; right: 14px; bottom: 12px; height: 76px; border-radius: 28px;
+          background: rgba(255,255,255,.18); backdrop-filter: blur(10px); }
+
+  #s-type { background: #0b0b0d; }
+  #s-type .doc { position: absolute; left: 34px; right: 30px; bottom: 34px; font: 600 64px/1.05 "Inter"; letter-spacing: -1.5px; }
+  #s-type .hint { position: absolute; left: 36px; top: 64px; font: 500 13px/1 "Noto Sans SC"; color: #6e6e73; }
+  .caret { display: inline-block; width: 4px; height: 58px; background: #2f8bff; vertical-align: -6px; margin-left: 3px; border-radius: 2px; }
+
+  #s-callin { background: radial-gradient(120% 80% at 50% 0%, #2a6f58, #0f1e1a 55%, #070b0a); }
+  .avatar { position: absolute; left: 50%; top: 96px; width: 96px; height: 96px; margin-left: -48px; border-radius: 50%;
+            background: linear-gradient(145deg, #ffd6a8, #f59c7a); display: flex; align-items: center; justify-content: center;
+            font: 500 40px/1 "Noto Sans SC"; color: #fff; }
+  .ring { position: absolute; left: 50%; top: 144px; width: 96px; height: 96px; margin: -48px 0 0 -48px; border-radius: 50%;
+          border: 2px solid rgba(7,193,96,.8); }
+  .callname { position: absolute; top: 210px; width: 100%; text-align: center; font: 500 24px/1 "Noto Sans SC"; }
+  .callsub { position: absolute; top: 246px; width: 100%; text-align: center; font: 400 13px/1 "Noto Sans SC"; color: rgba(255,255,255,.65); }
+  .btns { position: absolute; bottom: 38px; left: 0; right: 0; display: flex; justify-content: space-around; padding: 0 60px; }
+  .cbtn { width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+  .cbtn svg { width: 28px; height: 28px; }
+  .cbtn.red { background: #ff3b30; } .cbtn.green { background: var(--wechat); }
+  .cbtn.glass2 { background: rgba(255,255,255,.2); width: 52px; height: 52px; }
+  .tap { position: absolute; width: 60px; height: 60px; border-radius: 50%; background: rgba(255,255,255,.5); }
+
+  #s-call { background: #1b1410; }
+  .room { position: absolute; inset: 0;
+          background: radial-gradient(60% 50% at 20% 25%, rgba(255,196,120,.55), transparent 70%),
+                      radial-gradient(40% 40% at 85% 20%, rgba(255,230,190,.35), transparent 70%),
+                      linear-gradient(180deg, #6b4a36, #3a2a22 60%, #241a15); }
+  .bokeh { position: absolute; border-radius: 50%; background: rgba(255,214,150,.35); filter: blur(4px); }
+  .person { position: absolute; left: 50%; bottom: -10px; width: 300px; height: 330px; margin-left: -150px; }
+  .pip { position: absolute; top: 58px; right: 18px; width: 92px; height: 124px; border-radius: 14px; overflow: hidden;
+         box-shadow: 0 6px 18px rgba(0,0,0,.4); border: 1.5px solid rgba(255,255,255,.25);
+         background: linear-gradient(180deg, #3b5d7a, #1c2b3a); }
+  .callbar { position: absolute; top: 58px; left: 22px; font: 500 16px/1.3 "Noto Sans SC"; text-shadow: 0 1px 6px rgba(0,0,0,.4); }
+  .callbar span { display: block; font: 500 13px/1 "Inter"; opacity: .8; margin-top: 4px; font-variant-numeric: tabular-nums; }
+
+  #s-agent { background: radial-gradient(120% 70% at 50% 0%, #1b1640, #0a0a12 60%, #050507); }
+  .ahead { position: absolute; top: 56px; left: 24px; right: 24px; display: flex; align-items: center; gap: 8px;
+           font: 600 16px/1 "Inter"; }
+  .spark { width: 22px; height: 22px; }
+  .input { position: absolute; left: 18px; right: 18px; bottom: 18px; height: 46px; border-radius: 23px;
+           background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12);
+           display: flex; align-items: center; padding: 0 16px; font: 400 14px/1 "Noto Sans SC"; color: #fff; }
+  .input .ph { color: rgba(255,255,255,.35); }
+  .send { position: absolute; right: 6px; top: 6px; width: 34px; height: 34px; border-radius: 50%;
+          background: linear-gradient(135deg, #7a5cff, #2fb8ff); display: flex; align-items: center; justify-content: center; }
+  .bubble { position: absolute; right: 18px; top: 92px; max-width: 280px; padding: 10px 14px; border-radius: 18px 18px 4px 18px;
+            background: linear-gradient(135deg, #6d5cff, #3c8bff); font: 400 14px/1.4 "Noto Sans SC"; }
+  .steps { position: absolute; left: 22px; right: 22px; top: 150px; display: flex; flex-direction: column; gap: 9px; }
+  .step { display: flex; align-items: center; gap: 10px; font: 400 13.5px/1 "Noto Sans SC"; color: rgba(255,255,255,.88); }
+  .chk { width: 18px; height: 18px; border-radius: 50%; position: relative; flex: none; }
+  .chk .sp { position: absolute; inset: 0; border-radius: 50%; border: 2px solid rgba(255,255,255,.2); border-top-color: #9d8cff; }
+  .chk .ok { position: absolute; inset: 0; border-radius: 50%; background: #34c759; display: flex; align-items: center; justify-content: center; }
+  .order { position: absolute; left: 18px; right: 18px; top: 150px; height: 150px; border-radius: 20px;
+           background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.12); padding: 16px; }
+  .order .top { display: flex; align-items: center; gap: 8px; font: 600 15px/1 "Noto Sans SC"; color: #34c759; }
+  .order .item { display: flex; gap: 12px; margin-top: 14px; align-items: center; }
+  .cup { width: 54px; height: 54px; border-radius: 14px; background: linear-gradient(160deg, #f3e6d6, #d9bfa2);
+         display: flex; align-items: center; justify-content: center; }
+  .order .nm { font: 500 15px/1.2 "Noto Sans SC"; }
+  .order .ds { font: 400 12px/1.2 "Noto Sans SC"; color: rgba(255,255,255,.55); margin-top: 5px; }
+  .order .eta { position: absolute; left: 16px; right: 16px; bottom: 14px; display: flex; justify-content: space-between;
+                font: 400 12px/1 "Noto Sans SC"; color: rgba(255,255,255,.6); }
+  .order .eta b { color: #fff; font-weight: 500; }
+
+  /* ---------- 文案 ---------- */
+  .copy { position: absolute; opacity: 0; will-change: transform, opacity, filter; }
+  .eyebrow { font: 600 30px/1 "Inter", "Noto Sans SC"; letter-spacing: .5px; margin-bottom: 22px; }
+  .h { font: 600 86px/1.12 "Inter", "Noto Sans SC"; letter-spacing: -1px; }
+  .sub { font: 400 28px/1.5 "Noto Sans SC"; color: var(--muted); margin-top: 24px; }
+  .grad-ai { background: linear-gradient(90deg, #ff6ec7, #7a5cff 40%, #2fb8ff 75%, #3cf2c0);
+             -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .grad-steel { background: linear-gradient(180deg, #ffffff, #9a9ca3);
+                -webkit-background-clip: text; background-clip: text; color: transparent; }
+  #c-end { left: 0; right: 0; text-align: center; top: 780px; }
+  #c-end .name { font: 600 120px/1 "Inter"; letter-spacing: -3px; }
+  #c-end .tag { font: 400 34px/1 "Noto Sans SC"; color: #d2d2d7; margin-top: 26px; letter-spacing: 4px; }
+  #c-end .soon { font: 500 20px/1 "Noto Sans SC"; color: var(--muted); margin-top: 26px; letter-spacing: 6px; }
+  #fade { position: absolute; inset: 0; background: #000; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="ambient"></div>
+  <div id="shadow"></div>
+  <div id="cam">
+    <div id="phone">
+      <!-- 机身侧面：多层叠出厚度 -->
+      <div id="edges"></div>
+      <div class="face">
+        <div class="screen">
+          <!-- 息屏 -->
+          <div class="scr" id="s-off" style="background:#000"></div>
+
+          <!-- 主屏 -->
+          <div class="scr" id="s-home">
+            <svg class="wave" viewBox="0 0 408 408" preserveAspectRatio="none">
+              <path d="M260 0 C 300 120, 180 200, 408 300 L408 0Z" fill="rgba(255,255,255,.10)"/>
+              <path d="M320 0 C 330 140, 230 240, 408 360 L408 0Z" fill="rgba(160,240,255,.18)"/>
+              <path d="M0 250 C 120 200, 220 300, 408 230 L408 408 L0 408Z" fill="rgba(20,40,180,.35)"/>
+            </svg>
+            <div class="status"><span>9:41</span><span style="display:flex;align-items:center"><span class="sig"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:10px"></i></span><span class="batt"><i></i></span></span></div>
+            <div class="clock"><div class="d">9月 25日 星期四</div><div class="t">9:41</div></div>
+            <div class="dock"></div>
+            <div class="apps" id="apps"></div>
+          </div>
+
+          <!-- 输入演示 -->
+          <div class="scr" id="s-type">
+            <div class="status"><span>9:41</span><span class="batt"><i></i></span></div>
+            <div class="hint">备忘录</div>
+            <div class="doc"><span id="typed"></span><span class="caret" id="caret"></span></div>
+          </div>
+
+          <!-- 微信来电 -->
+          <div class="scr" id="s-callin">
+            <div class="status"><span>9:41</span><span class="batt"><i></i></span></div>
+            <div class="ring" id="ring1"></div><div class="ring" id="ring2"></div>
+            <div class="avatar">夏</div>
+            <div class="callname">林小夏</div>
+            <div class="callsub">邀请你进行视频通话…</div>
+            <div class="btns">
+              <div class="cbtn red"><svg viewBox="0 0 24 24"><path fill="#fff" d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.956.956 0 0 1 0-1.36C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.72c.18.18.29.44.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.1-.7-.28-.79-.73-1.68-1.36-2.66-1.85a.994.994 0 0 1-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg></div>
+              <div class="cbtn green" id="accept"><svg viewBox="0 0 24 24"><path fill="#fff" d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z"/></svg></div>
+            </div>
+            <div class="tap" id="tap"></div>
+          </div>
+
+          <!-- 微信视频通话中 -->
+          <div class="scr" id="s-call">
+            <div class="room" id="room"></div>
+            <div class="bokeh" style="left:40px;top:70px;width:46px;height:46px"></div>
+            <div class="bokeh" style="left:300px;top:40px;width:30px;height:30px;opacity:.7"></div>
+            <div class="bokeh" style="left:90px;top:170px;width:22px;height:22px;opacity:.6"></div>
+            <svg class="person" id="person" viewBox="0 0 300 330">
+              <defs>
+                <linearGradient id="skin" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f7d2b3"/><stop offset="1" stop-color="#d9a384"/></linearGradient>
+                <linearGradient id="hair" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b1d18"/><stop offset="1" stop-color="#140d0b"/></linearGradient>
+                <linearGradient id="knit" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e9e2d6"/><stop offset="1" stop-color="#b8ae9e"/></linearGradient>
+              </defs>
+              <path d="M150 40 c-52 0-76 40-76 86 0 30 8 72 -6 110 l164 0 c-14-38-6-80-6-110 0-46-24-86-76-86z" fill="url(#hair)"/>
+              <path d="M30 330 c0-60 44-92 120-92 s120 32 120 92z" fill="url(#knit)"/>
+              <rect x="128" y="190" width="44" height="60" rx="18" fill="#d9a384"/>
+              <ellipse cx="150" cy="140" rx="52" ry="64" fill="url(#skin)"/>
+              <path d="M98 128 c4-50 40-66 60-66 30 0 48 22 50 54 -20-24-60-36-110 12z" fill="url(#hair)"/>
+              <g id="eyes"><ellipse cx="130" cy="146" rx="5" ry="5.5" fill="#2a1a14"/><ellipse cx="170" cy="146" rx="5" ry="5.5" fill="#2a1a14"/></g>
+              <path d="M136 176 q14 12 28 0" stroke="#b5584a" stroke-width="4" fill="none" stroke-linecap="round"/>
+              <ellipse cx="118" cy="164" rx="10" ry="6" fill="#f2a08c" opacity=".35"/><ellipse cx="182" cy="164" rx="10" ry="6" fill="#f2a08c" opacity=".35"/>
+            </svg>
+            <div class="pip">
+              <svg viewBox="0 0 92 124" width="92" height="124">
+                <circle cx="46" cy="58" r="20" fill="#c79a7c"/>
+                <path d="M26 52 c0-22 40-26 40 0 -8-8-30-8-40 0z" fill="#1d1a1a"/>
+                <path d="M6 124 c0-26 18-40 40-40 s40 14 40 40z" fill="#2f3440"/>
+              </svg>
+            </div>
+            <div class="callbar">林小夏<span id="timer">00:00</span></div>
+            <div class="btns" style="bottom:22px;padding:0 70px;align-items:center">
+              <div class="cbtn glass2"><svg viewBox="0 0 24 24"><path fill="#fff" d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11z"/></svg></div>
+              <div class="cbtn red"><svg viewBox="0 0 24 24"><path fill="#fff" d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.956.956 0 0 1 0-1.36C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.72c.18.18.29.44.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.1-.7-.28-.79-.73-1.68-1.36-2.66-1.85a.994.994 0 0 1-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg></div>
+              <div class="cbtn glass2"><svg viewBox="0 0 24 24"><path fill="#fff" d="M20 5h-3.2L15 3H9L7.2 5H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm-5 11.5V14H9v2.5L5.5 13 9 9.5V12h6V9.5l3.5 3.5-3.5 3.5z"/></svg></div>
+            </div>
+          </div>
+
+          <!-- AI Agent -->
+          <div class="scr" id="s-agent">
+            <div class="status"><span>9:41</span><span class="batt"><i></i></span></div>
+            <div class="ahead">
+              <svg class="spark" viewBox="0 0 24 24"><defs><linearGradient id="ag" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff6ec7"/><stop offset=".5" stop-color="#7a5cff"/><stop offset="1" stop-color="#2fb8ff"/></linearGradient></defs><path fill="url(#ag)" d="M12 1.5l2.3 6.2 6.2 2.3-6.2 2.3L12 18.5l-2.3-6.2L3.5 10l6.2-2.3zM19 15l1 2.6 2.5 1-2.5 1L19 22l-1-2.4-2.5-1 2.5-1z"/></svg>
+              AI Agent
+            </div>
+            <div class="bubble" id="bubble">帮我点一杯冰美式，少冰，送到公司</div>
+            <div class="steps" id="steps"></div>
+            <div class="order" id="order">
+              <div class="top"><svg width="18" height="18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#34c759"/><path d="M7 12.5l3.2 3.2L17 9" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>订单已提交</div>
+              <div class="item">
+                <div class="cup"><svg width="30" height="34" viewBox="0 0 30 34"><path d="M5 8h20l-2.5 24h-15z" fill="#fff" opacity=".9"/><path d="M6.2 14h17.6l-1.6 16h-14.4z" fill="#6b3f22"/><rect x="3" y="5" width="24" height="4" rx="2" fill="#4a4a4a"/><rect x="17" y="0" width="2" height="7" fill="#4a4a4a" transform="rotate(12 18 3)"/></svg></div>
+                <div><div class="nm">冰美式 · 大杯</div><div class="ds">少冰 · 送至 公司</div></div>
+              </div>
+              <div class="eta"><span>预计送达</span><b id="eta">25 分钟</b></div>
+            </div>
+            <div class="input"><span id="agentInput"></span><span class="caret" id="caret2" style="height:18px;width:2px;vertical-align:-3px"></span><span class="ph" id="ph">给 Agent 一个任务…</span>
+              <div class="send"><svg width="16" height="16" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            </div>
+          </div>
+
+          <div class="glow" id="glow"></div>
+          <div class="glass"></div>
+          <div class="punch"></div>
+        </div>
+        <div class="kbd" id="kbd"></div>
+        <div class="sheen" id="sheen"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 文案层 -->
+  <div class="copy" id="c-design" style="left:210px;top:330px;width:760px">
+    <div class="eyebrow" style="color:#a1a1a6">全新设计</div>
+    <div class="h grad-steel">方屏，<br>遇上全键盘。</div>
+    <div class="sub">一体化方形屏幕，搭配经典实体 QWERTY 键盘。</div>
+  </div>
+  <div class="copy" id="c-keys" style="left:0;right:0;top:820px;text-align:center">
+    <div class="h" style="font-size:64px">每一次按键，都清晰可感。</div>
+  </div>
+  <div class="copy" id="c-call" style="left:1080px;top:330px;width:760px">
+    <div class="eyebrow" style="color:var(--wechat)">微信视频通话</div>
+    <div class="h">一键接通，<br>近在眼前。</div>
+    <div class="sub">方屏视野，面对面交流更自然。</div>
+  </div>
+  <div class="copy" id="c-agent" style="left:210px;top:320px;width:760px">
+    <div class="eyebrow grad-ai" style="display:inline-block">AI Agent</div>
+    <div class="h">说一句，<br>它就帮你办好。</div>
+    <div class="sub">理解需求、挑选商品、自动下单，一气呵成。</div>
+  </div>
+  <div class="copy" id="c-end">
+    <div class="name grad-steel">Q1</div>
+    <div class="tag">键，见未来。</div>
+    <div class="soon">即将发布</div>
+  </div>
+  <div id="fade"></div>
+</div>
+
+<script>
+/* =================== 可修改的文案 =================== */
+const AGENT_TEXT = '帮我点一杯冰美式，少冰，送到公司';
+const STEPS = ['理解需求：冰美式 · 少冰', '打开外卖应用，匹配附近门店', '选择 大杯 · 少冰，加入订单', '确认地址：公司 · 提交订单'];
+const DURATION = 30;
+
+/* =================== 构建 DOM =================== */
+const $ = id => document.getElementById(id);
+const edges = $('edges');
+const EDGE_LAYERS = 14;
+for (let i = 1; i <= EDGE_LAYERS; i++) {
+  const d = document.createElement('div');
+  d.className = 'edge' + (i > 1 && i < EDGE_LAYERS ? ' rim' : '');
+  d.style.transform = `translateZ(${-i * 1.6}px)`;
+  edges.appendChild(d);
+}
+
+const ROWS = [
+  [['Q','#'],['W','1'],['E','2'],['R','3'],['T','('],['Y',')'],['U','_'],['I','-'],['O','+'],['P','@']],
+  [['A','*'],['S','4'],['D','5'],['F','6'],['G','/'],['H',':'],['J',';'],['K',"'"],['L','"'],['⌫','',1]],
+  [['alt','',1],['Z','7'],['X','8'],['C','9'],['V','?'],['B','!'],['N',','],['M','.'],['sym','',1],['↵','',1]],
+  [['⇧','',1],['○','',1],['◁','',1],['SPACE','',2],['▢','',1],['fn','',1],['⇧','',1]],
+];
+const keyEls = {};  // 字母 -> 元素
+const allKeys = [];
+const kbd = $('kbd');
+ROWS.forEach((row, ri) => {
+  const r = document.createElement('div'); r.className = 'row';
+  row.forEach(([k, s, kind], ci) => {
+    const el = document.createElement('div');
+    el.className = 'key' + (kind === 1 ? ' fn' : '') + (kind === 2 ? ' w3' : '');
+    el.innerHTML = `<div class="lit"></div>${s ? `<small>${s}</small>` : ''}<span class="lbl">${kind === 2 ? '' : k}</span>`;
+    r.appendChild(el);
+    const rec = { el, lit: el.firstChild, k, ri, ci, n: row.length };
+    allKeys.push(rec);
+    keyEls[k === 'SPACE' ? ' ' : k] = keyEls[k === 'SPACE' ? ' ' : k] || rec;
+  });
+  kbd.appendChild(r);
+});
+allKeys.forEach(k => { k.x = (k.ci + 0.5) / k.n; });
+
+const APPS = [
+  ['微信', 'linear-gradient(160deg,#2be07a,#07c160)', '<path fill="#fff" d="M9.5 4C5.4 4 2 6.8 2 10.3c0 2 1.1 3.7 2.8 4.9l-.7 2.1 2.5-1.3c.9.3 1.9.4 2.9.4h.4a5.6 5.6 0 0 1-.2-1.5c0-3.4 3.2-6.1 7.2-6.1h.4C16.6 6.1 13.4 4 9.5 4zM7 8.2a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm5 0a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm4.8 2.6c-3.3 0-6 2.2-6 5s2.7 5 6 5c.7 0 1.4-.1 2.1-.3l2 1-.5-1.7c1.4-.9 2.4-2.3 2.4-4 0-2.8-2.7-5-6-5zm-2 2.2a.8.8 0 1 1 0 1.6.8.8 0 0 1 0-1.6zm4 0a.8.8 0 1 1 0 1.6.8.8 0 0 1 0-1.6z"/>'],
+  ['AI Agent', 'linear-gradient(135deg,#ff6ec7,#7a5cff 50%,#2fb8ff)', '<path fill="#fff" d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4z"/>'],
+  ['相机', 'linear-gradient(160deg,#5e6470,#2b2f36)', '<circle cx="12" cy="13" r="4.2" fill="none" stroke="#fff" stroke-width="2"/><path fill="none" stroke="#fff" stroke-width="2" d="M4 8h3l2-2.5h6L17 8h3v11H4z"/>'],
+  ['时钟', 'linear-gradient(160deg,#fff,#e5e5ea)', '<circle cx="12" cy="12" r="9" fill="#111"/><path d="M12 6v6l4 2" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round"/>'],
+  ['设置', 'linear-gradient(160deg,#9aa0a8,#5b6068)', '<circle cx="12" cy="12" r="3" fill="none" stroke="#fff" stroke-width="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1" stroke="#fff" stroke-width="2" stroke-linecap="round"/>'],
+  ['电话', 'linear-gradient(160deg,#5cf07e,#30c552)', '<path fill="#fff" d="M6.6 10.8a15.2 15.2 0 0 0 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1A17 17 0 0 1 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1z"/>'],
+  ['信息', 'linear-gradient(160deg,#5cf07e,#30c552)', '<path fill="#fff" d="M12 3C6.5 3 2 6.6 2 11c0 2.4 1.3 4.6 3.4 6.1L4.5 21l4-2c1.1.3 2.3.5 3.5.5 5.5 0 10-3.6 10-8S17.5 3 12 3z"/>'],
+  ['浏览器', 'linear-gradient(160deg,#fff,#e5e5ea)', '<circle cx="12" cy="12" r="9" fill="none" stroke="#1a82ff" stroke-width="2"/><path d="M15.5 8.5l-2 5-5 2 2-5z" fill="#ff3b30"/>'],
+  ['音乐', 'linear-gradient(160deg,#ff6b81,#fa2d48)', '<path fill="#fff" d="M9 17.5a2.5 2.5 0 1 1-2-2.45V5l11-2v12.5a2.5 2.5 0 1 1-2-2.45V6.4L9 7.7z"/>'],
+  ['相册', 'linear-gradient(160deg,#fff,#eef)', '<g transform="translate(12 12)">' + [0,45,90,135,180,225,270,315].map((a,i)=>`<ellipse rx="3" ry="6.5" cy="-5" fill="hsl(${i*45},85%,60%)" opacity=".85" transform="rotate(${a})"/>`).join('') + '</g>'],
+];
+$('apps').innerHTML = APPS.map(([n, bg, svg]) =>
+  `<div class="app"><div class="ico" style="background:${bg}"><svg viewBox="0 0 24 24">${svg}</svg></div><span>${n}</span></div>`).join('');
+
+$('steps').innerHTML = STEPS.map(s =>
+  `<div class="step"><div class="chk"><div class="sp"></div><div class="ok"><svg width="11" height="11" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="#fff" stroke-width="3.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div></div><span>${s}</span></div>`).join('');
+const stepEls = [...document.querySelectorAll('.step')];
+
+/* =================== 缓动工具 =================== */
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, p) => a + (b - a) * p;
+const easeInOut = p => p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+const easeOut = p => 1 - Math.pow(1 - p, 3);
+const easeOutExpo = p => p >= 1 ? 1 : 1 - Math.pow(2, -10 * p);
+const prog = (t, a, b) => clamp((t - a) / (b - a));
+// 在 [a,b] 淡入、[c,d] 淡出
+const window4 = (t, a, b, c, d) => t < a || t > d ? 0 : t < b ? easeOut(prog(t, a, b)) : t <= c ? 1 : 1 - easeInOut(prog(t, c, d));
+
+/* =================== 镜头关键帧 =================== */
+// x,y: 相对画面中心(px)  s: 缩放  rx/ry/rz: 旋转(deg)
+const CAM = [
+  { t: 0.0,  x: 0,    y: 30,   s: 1.02, rx: 10, ry: -82, rz: 0 },
+  { t: 3.6,  x: 0,    y: 0,    s: 1.10, rx: 6,  ry: -20, rz: -3 },
+  { t: 4.8,  x: 380,  y: 10,   s: 1.24, rx: 2,  ry: -14, rz: 0 },
+  { t: 7.8,  x: 400,  y: 0,    s: 1.24, rx: 1,  ry: -6,  rz: 0 },
+  { t: 9.0,  x: 0,    y: -560, s: 2.50, rx: 26, ry: 0,   rz: 0 },
+  { t: 11.8, x: 0,    y: -540, s: 2.42, rx: 22, ry: 5,   rz: 0 },
+  { t: 13.0, x: -400, y: 10,   s: 1.24, rx: 0,  ry: 14,  rz: 0 },
+  { t: 18.2, x: -420, y: 0,    s: 1.24, rx: 0,  ry: 8,   rz: 0 },
+  { t: 19.5, x: 400,  y: 10,   s: 1.26, rx: 0,  ry: -12, rz: 0 },
+  { t: 25.2, x: 420,  y: 0,    s: 1.26, rx: 0,  ry: -6,  rz: 0 },
+  { t: 26.6, x: 0,    y: -120, s: 0.92, rx: 4,  ry: 0,   rz: 0 },
+  { t: 30.0, x: 0,    y: -130, s: 0.88, rx: 2,  ry: 0,   rz: 0 },
+];
+function camAt(t) {
+  let i = 0;
+  while (i < CAM.length - 2 && t > CAM[i + 1].t) i++;
+  const a = CAM[i], b = CAM[i + 1], p = easeInOut(prog(t, a.t, b.t));
+  const o = {};
+  for (const k of ['x', 'y', 's', 'rx', 'ry', 'rz']) o[k] = lerp(a[k], b[k], p);
+  return o;
+}
+
+/* =================== 按键事件（也用于音效同步） =================== */
+const EVENTS = [];
+const PRESSES = [];
+function press(t, k) { PRESSES.push({ t, k }); EVENTS.push({ t, type: 'key' }); }
+// 场景 3：键入 Hello
+const HELLO = 'HELLO';
+const HELLO_T = [9.3, 9.58, 9.86, 10.08, 10.36];
+HELLO.split('').forEach((c, i) => press(HELLO_T[i], c));
+// 场景 5：输入 Agent 指令（拼音输入的按键节奏）
+const AG_START = 20.0, AG_END = 21.5;
+const PINYIN = 'BANGWODIANYIBEI';
+for (let i = 0; i < PINYIN.length; i++) press(AG_START + i * (AG_END - AG_START) / PINYIN.length, PINYIN[i]);
+press(21.75, '↵');
+EVENTS.push({ t: 13.95, type: 'tap' });
+EVENTS.push({ t: 12.4, type: 'ring' });
+[22.6, 23.05, 23.5, 23.95].forEach(t => EVENTS.push({ t, type: 'tick' }));
+EVENTS.push({ t: 24.35, type: 'success' });
+CAM.slice(1).forEach((c, i) => { if ([2, 4, 6, 8, 10].includes(i + 1)) EVENTS.push({ t: CAM[i].t, type: 'whoosh', d: c.t - CAM[i].t }); });
+EVENTS.push({ t: 2.5, type: 'wake' });
+EVENTS.push({ t: 27.2, type: 'end' });
+EVENTS.sort((a, b) => a.t - b.t);
+window.EVENTS = EVENTS;
+
+function pressAmt(t, key) {
+  let v = 0;
+  for (const p of PRESSES) {
+    if (p.k !== key) continue;
+    const d = t - p.t;
+    if (d < -0.05 || d > 0.3) continue;
+    v = Math.max(v, d < 0 ? 1 + d / 0.05 : 1 - easeOut(d / 0.3));
+  }
+  return clamp(v);
+}
+
+/* =================== 屏幕状态 =================== */
+const SCREENS = [
+  ['s-off',    -1,   2.5],
+  ['s-home',   2.5,  8.4],
+  ['s-type',   8.4,  12.05],
+  ['s-callin', 12.4, 14.25],
+  ['s-call',   14.25, 19.2],
+  ['s-agent',  19.2, 25.45],
+  ['s-home',   25.8, 99],
+];
+const XF = 0.45; // 交叉淡化时长
+const scrEls = {};
+['s-off','s-home','s-type','s-callin','s-call','s-agent'].forEach(id => scrEls[id] = $(id));
+
+function setCopy(id, t, a, b, c, d, dx = 0, dy = 30) {
+  const el = $(id);
+  const v = window4(t, a, b, c, d);
+  const inP = t < c ? 1 - v : 0, outP = t >= c ? 1 - v : 0;
+  el.style.opacity = v;
+  el.style.filter = `blur(${(1 - v) * 14}px)`;
+  el.style.transform = `translate(${dx * (inP - outP)}px, ${dy * inP - dy * .6 * outP}px) scale(${1 + .03 * inP})`;
+}
+
+/* =================== 主渲染 =================== */
+function render(t) {
+  // 镜头
+  const c = camAt(t);
+  const bob = Math.sin(t * 1.3) * 4;
+  $('phone').style.transform =
+    `translate3d(${c.x}px, ${c.y + bob}px, 0) scale(${c.s}) rotateX(${c.rx}deg) rotateY(${c.ry}deg) rotateZ(${c.rz}deg)`;
+
+  // 光泽扫过：跟随旋转
+  const sheenPos = (c.ry + 40) * 1.8 + t * 6;
+  $('sheen').style.transform = `translateX(${sheenPos - 60}px)`;
+  $('sheen').style.opacity = clamp(0.5 + Math.abs(c.ry) / 60);
+
+  // 地面阴影
+  const sh = $('shadow');
+  sh.style.transform = `translate(${c.x}px, ${c.y + 327 * c.s + 30}px) scale(${c.s * (0.6 + 0.4 * Math.cos(c.ry * Math.PI / 180))}, ${c.s})`;
+  sh.style.opacity = 0.8 * clamp(1 - (c.s - 1.2)) * prog(t, 0.5, 2.5);
+
+  // 环境光（随场景换色）
+  const tint = [
+    [0, [60, 70, 110], 0.0], [3.0, [70, 80, 140], 0.35], [8.4, [40, 70, 140], 0.25],
+    [12.6, [7, 193, 96], 0.22], [19.3, [122, 92, 255], 0.35], [25.8, [90, 100, 150], 0.25], [30, [90, 100, 150], 0.0],
+  ];
+  let ti = 0; while (ti < tint.length - 2 && t > tint[ti + 1][0]) ti++;
+  const ta = tint[ti], tb = tint[ti + 1], tp = easeInOut(prog(t, ta[0], Math.min(tb[0], ta[0] + 1.2)));
+  const col = ta[1].map((v, i) => Math.round(lerp(v, tb[1][i], tp)));
+  const alpha = lerp(ta[2], tb[2], tp);
+  $('ambient').style.background =
+    `radial-gradient(45% 55% at ${50 + c.x / 19.2}% ${50 + c.y / 10.8 * 0.3}%, rgba(${col},${alpha}) 0%, rgba(${col},${alpha * .25}) 45%, transparent 75%)`;
+
+  // 开场：光从黑暗中勾出机身
+  const intro = easeOut(prog(t, 0.1, 2.4));
+  $('cam').style.filter = t < 3 ? `brightness(${lerp(0.08, 1, intro)})` : 'none';
+
+  // 屏幕内容
+  const op = {};
+  for (const [id, a, b] of SCREENS) {
+    const v = t < a ? 0 : t < a + XF ? easeInOut((t - a) / XF) : t < b ? 1 : t < b + XF ? 1 - easeInOut((t - b) / XF) : 0;
+    op[id] = Math.max(op[id] || 0, v);
+  }
+  for (const id in scrEls) {
+    scrEls[id].style.opacity = op[id];
+    scrEls[id].style.visibility = op[id] > 0.001 ? 'visible' : 'hidden';
+  }
+  // 亮屏时的轻微放大
+  const wake = prog(t, 2.5, 3.4);
+  scrEls['s-home'].style.transform = `scale(${t < 8 ? lerp(1.12, 1, easeOutExpo(wake)) : lerp(1.08, 1, easeOutExpo(prog(t, 25.8, 26.8)))})`;
+  scrEls['s-home'].style.filter = t < 4 ? `blur(${(1 - easeOut(wake)) * 8}px)` : 'none';
+
+  // 场景 3：打字
+  const n = HELLO_T.filter(x => t >= x + 0.04).length;
+  $('typed').textContent = 'Hello'.slice(0, n);
+  $('caret').style.opacity = (Math.floor(t * 2.4) % 2 === 0 || (t > 9.2 && t < 10.6)) ? 1 : 0;
+
+  // 场景 4：来电 → 接通
+  [$('ring1'), $('ring2')].forEach((r, i) => {
+    const p = ((t - 12.4) / 1.2 + i * 0.5) % 1;
+    r.style.transform = `scale(${1 + p * 1.1})`;
+    r.style.opacity = t > 12.4 && t < 14.1 ? (1 - p) * 0.9 : 0;
+  });
+  const tapP = prog(t, 13.95, 14.4);
+  $('tap').style.left = '246px'; $('tap').style.top = '310px';
+  $('tap').style.opacity = t > 13.95 && t < 14.4 ? (1 - tapP) * 0.8 : 0;
+  $('tap').style.transform = `scale(${0.4 + tapP * 1.2})`;
+  $('accept').style.transform = `scale(${1 - 0.1 * Math.sin(Math.PI * prog(t, 13.9, 14.15))})`;
+  // 接通后画面从接听键放大展开
+  const openP = easeOutExpo(prog(t, 14.25, 15.0));
+  scrEls['s-call'].style.clipPath = t < 15.1 ? `circle(${openP * 130}% at 76% 83%)` : 'none';
+  const secs = Math.max(0, Math.floor(t - 14.3));
+  $('timer').textContent = `00:${String(secs).padStart(2, '0')}`;
+  $('person').style.transform = `translate(${Math.sin(t * .9) * 5}px, ${Math.sin(t * 1.4) * 3}px) rotate(${Math.sin(t * .7) * 1.5}deg)`;
+  $('eyes').style.transform = (t % 3.1) < 0.12 ? 'translateY(146px) scaleY(.1) translateY(-146px)' : 'none';
+  $('room').style.transform = `scale(1.05) translateX(${Math.sin(t * .5) * 4}px)`;
+
+  // 场景 5：AI Agent
+  const typedN = Math.floor(clamp((t - AG_START) / (AG_END - AG_START)) * AGENT_TEXT.length);
+  const sent = t >= 21.8;
+  $('agentInput').textContent = sent ? '' : AGENT_TEXT.slice(0, typedN);
+  $('ph').style.display = !sent && typedN === 0 ? 'inline' : (sent ? 'inline' : 'none');
+  $('caret2').style.display = !sent && typedN > 0 ? 'inline-block' : 'none';
+  const bp = easeOutExpo(prog(t, 21.8, 22.4));
+  $('bubble').style.opacity = bp;
+  $('bubble').style.transform = `translateY(${(1 - bp) * 200}px) scale(${0.85 + 0.15 * bp})`;
+  $('bubble').style.transformOrigin = '100% 100%';
+  const stepT = [22.2, 22.65, 23.1, 23.55];
+  stepEls.forEach((el, i) => {
+    const a = stepT[i], p = easeOut(prog(t, a, a + 0.35));
+    el.style.opacity = p * (1 - easeInOut(prog(t, 24.2, 24.5)));
+    el.style.transform = `translateY(${(1 - p) * 10}px)`;
+    const done = t >= a + 0.4;
+    el.querySelector('.sp').style.opacity = done ? 0 : 1;
+    el.querySelector('.sp').style.transform = `rotate(${t * 720}deg)`;
+    const ok = el.querySelector('.ok');
+    const okp = easeOutExpo(prog(t, a + 0.4, a + 0.7));
+    ok.style.opacity = okp; ok.style.transform = `scale(${0.4 + 0.6 * okp})`;
+  });
+  const orp = easeOutExpo(prog(t, 24.35, 25.0));
+  $('order').style.opacity = orp;
+  $('order').style.transform = `translateY(${(1 - orp) * 30}px) scale(${0.94 + 0.06 * orp})`;
+  // 彩色光环：Agent 工作时环绕屏幕
+  const glowV = window4(t, 19.6, 20.2, 24.3, 25.0) * (0.75 + 0.25 * Math.sin(t * 5));
+  $('glow').style.opacity = glowV;
+  $('glow').style.setProperty('--a', `${t * 140}deg`);
+
+  // 键盘：按压 + 背光
+  const wave = t - 5.2;
+  for (const k of allKeys) {
+    const lbl = k.k === 'SPACE' ? ' ' : k.k;
+    const pr = pressAmt(t, lbl);
+    // 背光扫过：从左到右
+    const d = wave - k.x * 0.9 - k.ri * 0.08;
+    const back = d > 0 && d < 0.9 ? Math.sin(Math.PI * d / 0.9) : 0;
+    const agentLit = window4(t, 19.8, 20.1, 21.8, 22.3) * 0.25;
+    k.lit.style.opacity = Math.max(pr, back * 0.85, agentLit);
+    k.el.style.transform = pr ? `translateY(${pr * 2.2}px)` : '';
+    k.el.style.filter = pr ? `brightness(${1 + pr * 0.3})` : '';
+  }
+
+  // 文案
+  setCopy('c-design', t, 4.6, 5.4, 7.6, 8.2, -40, 0);
+  setCopy('c-keys',   t, 9.4, 10.1, 11.7, 12.2, 0, 30);
+  setCopy('c-call',   t, 13.1, 13.9, 18.0, 18.6, 40, 0);
+  setCopy('c-agent',  t, 19.7, 20.5, 25.0, 25.6, -40, 0);
+  setCopy('c-end',    t, 27.0, 28.0, 40, 41, 0, 24);
+
+  // 结尾淡出
+  $('fade').style.opacity = easeInOut(prog(t, 29.2, 30));
+}
+window.render = render;
+window.DURATION = DURATION;
+
+/* =================== 浏览器预览 =================== */
+if (!navigator.webdriver) {
+  let t0 = performance.now(), paused = false, cur = 0;
+  const fit = () => { const s = Math.min(innerWidth / 1920, innerHeight / 1080);
+    $('stage').style.transform = `scale(${s})`; $('stage').style.transformOrigin = '0 0'; };
+  addEventListener('resize', fit); fit();
+  addEventListener('keydown', e => {
+    if (e.code === 'Space') { paused = !paused; t0 = performance.now() - cur * 1000; }
+    if (e.code === 'ArrowRight') { cur = Math.min(DURATION, cur + 1); t0 = performance.now() - cur * 1000; }
+    if (e.code === 'ArrowLeft') { cur = Math.max(0, cur - 1); t0 = performance.now() - cur * 1000; }
+  });
+  const loop = () => { if (!paused) cur = ((performance.now() - t0) / 1000) % DURATION; render(cur); requestAnimationFrame(loop); };
+  document.fonts.ready.then(loop);
+} else {
+  render(0);
+}
+</script>
+</body>
+</html>

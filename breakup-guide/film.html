@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>心碎修复指南</title>
+<!--
+  40 秒竖屏短片（1080x1920）：刚分手的人如何走出来。
+  主线是“金缮”：碎掉的瓷心随着每一步被拼回、用金线修补；背景天空从深夜雨夜走到日出。
+  画面由 render(t) 确定性绘制，render.js 逐帧截图编码。浏览器打开可预览（空格暂停，← → 跳转）。
+-->
+<style>
+  :root {
+    --paper: #efeee9;
+    --card: #ffffff;
+    --ink: #1c1d21;
+    --body: #4a4c52;
+    --muted: #8d8f95;
+    --gold: #c8962e;
+    --gold-hi: #f2d27a;
+    --green: #2f9e5b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: #000; overflow: hidden; }
+  body { font-family: "Noto Sans SC", "Inter", sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
+  #stage { position: relative; width: 1080px; height: 1920px; overflow: hidden; background: var(--paper); }
+
+  .top { position: absolute; left: 70px; right: 70px; top: 86px; display: flex; justify-content: space-between; align-items: baseline; }
+  .top .name { font: 700 38px/1 "Noto Serif SC", serif; letter-spacing: 2px; }
+  .top .pct { font: 500 28px/1 "Noto Sans SC"; color: var(--muted); }
+  .top .pct b { font: 700 40px/1 "Inter"; color: var(--gold); font-variant-numeric: tabular-nums; margin-left: 8px; }
+  .bar { position: absolute; left: 70px; right: 70px; top: 150px; height: 10px; border-radius: 5px; background: #dddcd6; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; border-radius: 5px; background: linear-gradient(90deg, #b8862a, #f2d27a, #c8962e); }
+
+  svg#hero { position: absolute; left: 0; top: 190px; width: 1080px; height: 760px; overflow: visible; }
+
+  .card { position: absolute; left: 60px; top: 950px; width: 960px; height: 860px; border-radius: 48px; background: var(--card);
+          box-shadow: 0 24px 60px rgba(40,36,24,.10), 0 2px 0 rgba(0,0,0,.03); opacity: 0; will-change: transform, opacity; }
+  .chip { position: absolute; left: 56px; top: 50px; font: 700 26px/1 "Inter"; letter-spacing: 4px; color: var(--gold); }
+  .chip span { color: #c9c9c4; }
+  .card svg { position: absolute; left: 40px; top: 110px; width: 880px; height: 330px; overflow: visible;
+              fill: none; stroke: var(--ink); stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round; }
+  .card h2 { position: absolute; left: 56px; right: 56px; top: 478px; font: 700 76px/1.15 "Noto Serif SC", serif; letter-spacing: -1px; }
+  .card p { position: absolute; left: 56px; right: 56px; top: 596px; font: 400 40px/1.62 "Noto Sans SC"; color: var(--body); }
+  .card p b { color: var(--ink); font-weight: 700; }
+  svg .w { fill: #fff; }
+  svg .ink { fill: var(--ink); stroke: none; }
+  svg text { fill: var(--ink); stroke: none; font-family: "Noto Sans SC", "Inter"; }
+  svg [data-pop] { transform-box: fill-box; transform-origin: 50% 50%; }
+
+  /* 首尾两张卡的特殊排版 */
+  #c0 h2 { top: 470px; font-size: 104px; }
+  #c0 p { top: 610px; }
+  #c9 h2 { top: 120px; font-size: 76px; line-height: 1.3; }
+  #c9 p { top: 340px; }
+  .help { position: absolute; left: 56px; right: 56px; bottom: 56px; border-radius: 28px; border: 3px solid var(--gold);
+          padding: 30px 34px; font: 400 30px/1.55 "Noto Sans SC"; color: var(--body); }
+  .help b { display: block; font: 700 46px/1.2 "Noto Sans SC"; color: var(--ink); margin-top: 12px; }
+  .help b em { font-style: normal; font-family: "Inter"; color: var(--gold); letter-spacing: 2px; }
+  #fade { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="top"><span class="name">心碎修复指南</span><span class="pct">修复进度<b id="pct">0%</b></span></div>
+  <div class="bar"><i id="barFill"></i></div>
+
+  <!-- 上半部分：天空 + 瓷心 -->
+  <svg id="hero" viewBox="0 190 1080 760">
+    <defs>
+      <radialGradient id="skyGrad" cx="50%" cy="30%" r="80%">
+        <stop id="sky0" offset="0" stop-color="#2f3763"/><stop id="sky1" offset="1" stop-color="#1b2140"/>
+      </radialGradient>
+      <clipPath id="skyClip"><circle cx="540" cy="570" r="330"/></clipPath>
+      <linearGradient id="goldGrad" gradientUnits="userSpaceOnUse" x1="-200" y1="0" x2="200" y2="0">
+        <stop offset="0" stop-color="#b3822a"/><stop offset=".45" stop-color="#c8962e"/>
+        <stop offset=".5" stop-color="#fff0b8"/><stop offset=".55" stop-color="#c8962e"/><stop offset="1" stop-color="#b3822a"/>
+      </linearGradient>
+      <radialGradient id="glaze" cx="35%" cy="30%" r="80%">
+        <stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#f4f1ea"/><stop offset="1" stop-color="#e3ded2"/>
+      </radialGradient>
+      <radialGradient id="sunGrad"><stop offset="0" stop-color="#fff4c9"/><stop offset=".55" stop-color="#ffd476"/><stop offset="1" stop-color="#ffc25a" stop-opacity="0"/></radialGradient>
+    </defs>
+    <circle cx="540" cy="570" r="330" fill="url(#skyGrad)"/>
+    <g clip-path="url(#skyClip)">
+      <circle id="sun" cx="540" cy="960" r="150" fill="url(#sunGrad)"/>
+      <g id="stars"></g>
+      <g id="rain" stroke="#9fb0e0" stroke-width="3" stroke-linecap="round"></g>
+    </g>
+    <g id="heart"></g>
+    <g id="sparkles"></g>
+  </svg>
+
+  <div id="cards"></div>
+  <div id="fade"></div>
+</div>
+
+<script>
+/* ======================= 时间表 ======================= */
+// 每张卡：[开始, 结束]。步骤卡里的动画都相对开始时间 r 计算。
+const CARDS = [[1.3, 3.2], [3.2, 7.6], [7.6, 12.0], [12.0, 16.4], [16.4, 20.8], [20.8, 25.2], [25.2, 29.6], [29.6, 34.0], [34.0, 36.8], [36.8, 99]];
+const T = (k, r) => +(CARDS[k][0] + r).toFixed(3);
+const DURATION = 40;
+
+/* ======================= 瓷心 ======================= */
+const HEART = 'M0,90 C-120,10 -170,-60 -120,-120 C-80,-165 -20,-150 0,-95 C20,-150 80,-165 120,-120 C170,-60 120,10 0,90 Z';
+const A1 = [[0, -95], [-15, -50], [12, -15]];
+const A2 = [[12, -15], [-10, 25], [8, 55], [0, 90]];
+const B = [[12, -15], [55, -30], [80, -5], [125, -35], [175, -52]];
+const pts = a => a.map(p => p.join(',')).join(' ');
+const PIECES = {
+  L: [[-300, -300], [0, -300], [0, -110], [0, -95], [-15, -50], [12, -15], [-10, 25], [8, 55], [0, 90], [0, 110], [0, 300], [-300, 300]],
+  RT: [[0, -300], [300, -300], [300, -52], [175, -52], [125, -35], [80, -5], [55, -30], [12, -15], [-15, -50], [0, -95], [0, -110]],
+  RB: [[12, -15], [55, -30], [80, -5], [125, -35], [175, -52], [300, -52], [300, 300], [0, 300], [0, 110], [0, 90], [8, 55], [-10, 25]],
+};
+// 碎开后的偏移（dx, dy, 旋转）
+const OFF = { L: [-58, 26, -11], RT: [52, -44, 13], RB: [60, 48, 9] };
+{
+  const defs = document.querySelector('#hero defs');
+  let d = `<clipPath id="heartClip"><path d="${HEART}"/></clipPath>`;
+  for (const k in PIECES) d += `<clipPath id="pc${k}"><polygon points="${pts(PIECES[k])}"/></clipPath>`;
+  defs.insertAdjacentHTML('beforeend', d);
+  let h = '';
+  for (const k in PIECES) h += `<g id="piece${k}">
+      <g clip-path="url(#pc${k})"><path d="${HEART}" fill="url(#glaze)" stroke="#1c1d21" stroke-width="7"/></g>
+      <g class="edge" clip-path="url(#heartClip)"><polygon points="${pts(PIECES[k])}" fill="none" stroke="#1c1d21" stroke-width="4" stroke-linejoin="round"/></g>
+    </g>`;
+  h += `<polyline id="crack" points="${pts([...A1, ...A2.slice(1)])}" fill="none" stroke="#1c1d21" stroke-width="4" stroke-linejoin="round" pathLength="1"/>`;
+  h += `<polyline id="crackB" clip-path="url(#heartClip)" points="${pts(B)}" fill="none" stroke="#1c1d21" stroke-width="4" stroke-linejoin="round" pathLength="1"/>`;
+  h += '<g clip-path="url(#heartClip)">';
+  [A1, A2, B].forEach((a, i) => h += `<polyline id="seam${i}" points="${pts(a)}" fill="none" stroke="url(#goldGrad)" stroke-width="11" stroke-linecap="round" stroke-linejoin="round" pathLength="1"/>`);
+  h += '</g>';
+  document.getElementById('heart').innerHTML = h;
+}
+// 星星与雨
+{
+  let s = '', seed = 5; const r = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+  for (let i = 0; i < 26; i++) s += `<circle cx="${(240 + r() * 600).toFixed(0)}" cy="${(250 + r() * 300).toFixed(0)}" r="${(1.5 + r() * 2.5).toFixed(1)}" fill="#fff"/>`;
+  document.getElementById('stars').innerHTML = s;
+  let rn = '';
+  for (let i = 0; i < 34; i++) rn += `<line data-x="${(220 + r() * 640).toFixed(0)}" data-o="${(r() * 700).toFixed(0)}" data-v="${(900 + r() * 400).toFixed(0)}"/>`;
+  document.getElementById('rain').innerHTML = rn;
+  let sp = '';
+  [[330, 400], [760, 420], [300, 700], [790, 690], [540, 300]].forEach(([x, y], i) =>
+    sp += `<g transform="translate(${x} ${y})"><path data-pop="${37.1 + i * .12}" d="M0,-22 L6,-6 22,0 6,6 0,22 -6,6 -22,0 -6,-6Z" fill="#e3b54b" stroke="none"/></g>`);
+  document.getElementById('sparkles').innerHTML = sp;
+}
+
+/* ======================= 卡片 ======================= */
+const chip = n => `<div class="chip">STEP 0${n} <span>/ 07</span></div>`;
+const tick = (x, y, t, r = 22) => `<g transform="translate(${x} ${y})"><g data-pop="${t}"><circle r="${r}" fill="#2f9e5b" stroke="none"/><path d="M${-r * .45},0 l${r * .3},${r * .32} ${r * .55},${-r * .62}" stroke="#fff" stroke-width="4.5"/></g></g>`;
+const toggle = (id, x, y) => `<g id="${id}" transform="translate(${x} ${y})"><rect class="trk" x="0" y="0" width="76" height="40" rx="20" stroke="none"/><circle class="knob" cx="20" cy="20" r="16" fill="#fff" stroke="none"/></g>`;
+const SHOE = 'M-52,22 L-52,-14 Q-40,-26 -24,-16 L2,0 Q34,4 54,10 Q60,18 55,24 L-52,24Z';
+
+const C = [];
+// 0 开场
+C[0] = `<div class="chip">给刚分手的你</div>
+  <svg viewBox="0 0 880 330">
+    <g transform="translate(440 170) rotate(-30)"><g data-pop="1.6">
+      <rect x="-150" y="-44" width="300" height="88" rx="44" fill="#f3d9c4" stroke="#1c1d21"/>
+      <rect x="-50" y="-44" width="100" height="88" fill="#ead0b8" stroke="none"/>
+      ${[-26, 0, 26].map(x => [-18, 18].map(y => `<circle cx="${x}" cy="${y}" r="4" fill="#c9a88c" stroke="none"/>`).join('')).join('')}
+      <rect x="-150" y="-44" width="300" height="88" rx="44" fill="none" stroke="#1c1d21"/>
+    </g></g>
+  </svg>
+  <h2 data-rise="1.55">刚分手？</h2>
+  <p data-rise="1.8">这是一份 7 步修复指南。<br>不用一天做完，慢慢来。</p>`;
+
+// 1 允许难过
+const TAGS = [['失落', 250, 40, '#e8eefc'], ['生气', 440, 70, '#fde8e4'], ['委屈', 270, 170, '#eef3e6'], ['想念', 460, 200, '#f5eefc']];
+C[1] = `${chip(1)}
+  <svg viewBox="0 0 880 330">
+    <circle class="w" cx="120" cy="175" r="82"/>
+    <circle class="ink" cx="94" cy="160" r="7"/><circle class="ink" cx="146" cy="160" r="7"/>
+    <path d="M92,218 Q120,196 148,218" data-out="${T(1, 2.3)},${T(1, 2.5)}"/>
+    <path d="M94,210 Q120,224 146,210" data-fade="${T(1, 2.3)},${T(1, 2.5)}"/>
+    <path id="tear" d="M152,178 q8,14 0,20 q-8,-6 0,-20z" fill="#8fb0e6" stroke="none"/>
+    ${TAGS.map(([s, x, y, c], i) => `<g transform="translate(${x} ${y})"><g data-pop="${T(1, .55 + i * .38)}"><rect width="150" height="68" rx="34" fill="${c}" stroke="#1c1d21" stroke-width="3.5"/><text x="75" y="46" font-size="34" font-weight="700" text-anchor="middle">${s}</text></g></g>`).join('')}
+    <rect x="730" y="30" width="64" height="250" rx="32" class="w"/>
+    <rect id="meter" x="738" y="38" width="48" height="234" rx="24" stroke="none"/>
+    <text x="762" y="322" font-size="26" text-anchor="middle" fill="#8d8f95">情绪强度</text>
+  </svg>
+  <h2 data-rise="${T(1, .3)}">允许自己难过</h2>
+  <p data-rise="${T(1, .45)}">想哭就哭。把感受说出来：<br><b>“我现在很失落”</b>——<br>给情绪起个名字，它就没那么大。</p>`;
+
+// 2 别去看 TA 的动态
+C[2] = `${chip(2)}
+  <svg viewBox="0 0 880 330">
+    <rect class="w" x="20" y="0" width="330" height="330" rx="40"/>
+    <text x="56" y="58" font-size="28" font-weight="700">聊天设置</text>
+    ${[['置顶聊天', 116, 'tg0'], ['不看 TA 朋友圈', 196, 'tg1'], ['消息免打扰', 276, 'tg2']].map(([s, y, id]) =>
+      `<text x="56" y="${y + 10}" font-size="27">${s}</text>${toggle(id, 250, y - 20)}<line x1="56" y1="${y + 40}" x2="326" y2="${y + 40}" stroke="#eeeeea" stroke-width="2"/>`).join('')}
+    <rect class="w" x="560" y="170" width="270" height="150" rx="14"/>
+    <text x="695" y="265" font-size="32" font-weight="700" text-anchor="middle">先收起来</text>
+    ${[0, 1, 2].map(i => `<g id="photo${i}"><rect x="-46" y="-54" width="92" height="108" rx="6" class="w" stroke-width="3.5"/><rect x="-36" y="-44" width="72" height="66" rx="3" fill="${['#f6d2c7', '#cfe0f7', '#e5d9f5'][i]}" stroke="none"/><path d="${'M0,12 C-20,-2 -22,-18 -11,-22 C-5,-24 0,-19 0,-14 C0,-19 5,-24 11,-22 C22,-18 20,-2 0,12 Z'}" transform="translate(0 -12) scale(.9)" fill="#e5412d" stroke="none"/></g>`).join('')}
+    <rect id="lid" x="546" y="148" width="298" height="30" rx="10" class="w"/>
+  </svg>
+  <h2 data-rise="${T(2, .3)}">别去看 TA 的动态</h2>
+  <p data-rise="${T(2, .45)}">屏蔽朋友圈、取消置顶，合照先收起来。<br>每看一次，都是<b>重新揭一次伤疤</b>。</p>`;
+
+// 3 想联系？等 24 小时
+const URGE = (() => { const p = []; for (let i = 0; i <= 50; i++) { const x = 480 + i * 7.4, u = (i / 50 - .32); p.push(`${x.toFixed(1)},${(280 - 215 * Math.exp(-u * u * 22)).toFixed(1)}`); } return 'M' + p.join(' L'); })();
+C[3] = `${chip(3)}
+  <svg viewBox="0 0 880 330">
+    <rect class="w" x="10" y="30" width="400" height="92" rx="46"/>
+    <text id="typing" x="46" y="90" font-size="34"></text>
+    <g transform="translate(362 76)"><g id="sendBtn"><circle r="30" fill="#34c759" stroke="none"/><path d="M-10,0 L10,0 M2,-9 L11,0 2,9" stroke="#fff" stroke-width="5"/></g></g>
+    <g transform="translate(362 76)"><g data-pop="${T(3, 1.35)}"><circle r="34" fill="#e5412d" stroke="#fff" stroke-width="5"/><path d="M-11,-11 L11,11 M11,-11 L-11,11" stroke="#fff" stroke-width="6"/></g></g>
+    <rect x="30" y="170" width="300" height="150" rx="18" fill="#fff6c9"/>
+    <text x="56" y="214" font-size="26" font-weight="700" fill="#b08a1c">备忘录 · 未发送</text>
+    <text id="memo" x="56" y="272" font-size="34" data-fade="${T(3, 1.8)},${T(3, 2.1)}">我想你了……</text>
+    <line x1="470" y1="290" x2="860" y2="290" stroke="#d8d8d3" stroke-width="3"/>
+    <path id="urge" d="${URGE}" stroke="#e5412d" stroke-width="6" pathLength="1" data-draw="${T(3, .7)},${T(3, 3.3)}"/>
+    <text x="640" y="40" font-size="28" font-weight="700" fill="#e5412d" data-fade="${T(3, 1.4)},${T(3, 1.7)}">冲动</text>
+    <text x="860" y="326" font-size="26" text-anchor="end" fill="#8d8f95" data-fade="${T(3, 2.6)},${T(3, 2.9)}">24 小时后，它会退</text>
+  </svg>
+  <h2 data-rise="${T(3, .3)}">想联系？先等 24 小时</h2>
+  <p data-rise="${T(3, .45)}">把想说的话写进备忘录，<b>不点发送</b>。<br>冲动像浪，会涨上来，也会退下去。</p>`;
+
+// 4 先照顾身体
+C[4] = `${chip(4)}
+  <svg viewBox="0 0 880 330">
+    ${[150, 440, 730].map((x, i) => `<circle cx="${x}" cy="130" r="92" fill="${['#eef1fa', '#fbf1e4', '#eaf5ee'][i]}" stroke="none"/>`).join('')}
+    <g transform="translate(150 130)"><path d="M-20,-50 A55,55 0 1 0 42,20 A42,42 0 1 1 -20,-50Z" fill="#f2c94c"/><text x="34" y="-26" font-size="24" font-weight="700">z</text><text x="52" y="-48" font-size="18" font-weight="700">z</text></g>
+    <g transform="translate(440 138)"><path class="w" d="M-58,-6 L58,-6 A58,52 0 0 1 -58,-6Z"/><line x1="10" y1="-70" x2="40" y2="-12"/><line x1="26" y1="-74" x2="50" y2="-14"/>
+      <path id="steam" d="M-28,-26 q-8,-12 0,-24 q8,-12 0,-24" stroke="#c9c9c4"/></g>
+    <g transform="translate(730 136) scale(1.3)"><path class="w" d="${SHOE}"/><line x1="-30" y1="-6" x2="-22" y2="-14" stroke-width="3"/><line x1="-20" y1="-2" x2="-12" y2="-10" stroke-width="3"/></g>
+    ${[['睡够 7 小时', 150], ['按时吃饭', 440], ['每天走 20 分钟', 730]].map(([s, x]) => `<text x="${x}" y="276" font-size="32" font-weight="700" text-anchor="middle">${s}</text>`).join('')}
+    ${tick(214, 62, T(4, .9), 26)}${tick(504, 62, T(4, 1.35), 26)}${tick(794, 62, T(4, 1.8), 26)}
+  </svg>
+  <h2 data-rise="${T(4, .3)}">先照顾好身体</h2>
+  <p data-rise="${T(4, .45)}">睡够 7 小时、按时吃饭、每天走 20 分钟。<br>很多时候，<b>心情跟着身体走</b>。</p>`;
+
+// 5 找人聊聊
+const PEOPLE = [['老朋友', '#f6d2c7', '友'], ['室友', '#cfe0f7', '室'], ['家人', '#dcefd9', '家']];
+C[5] = `${chip(5)}
+  <svg viewBox="0 0 880 330">
+    ${PEOPLE.map(([n, c, a], i) => `<g transform="translate(40 ${8 + i * 108})"><g data-pop="${T(5, .45 + i * .2)}" id="row${i}">
+      <rect class="w" x="0" y="0" width="800" height="92" rx="24" stroke-width="3.5"/>
+      <circle cx="56" cy="46" r="30" fill="${c}" stroke="none"/><text x="56" y="57" font-size="30" font-weight="700" text-anchor="middle">${a}</text>
+      <text x="108" y="58" font-size="34" font-weight="500">${n}</text>
+      <circle cx="740" cy="46" r="30" fill="#34c759" stroke="none"/>
+      <path d="M728,36 q4,-6 8,0 l2,6 q-2,4 -5,5 q3,8 10,12 q2,-3 5,-5 l6,2 q6,4 0,8 q-24,2 -26,-28z" fill="#fff" stroke="none"/>
+    </g></g>`).join('')}
+    <g id="ringWaves" transform="translate(780 54)">${[0, 1, 2].map(i => `<path class="rw" d="M${22 + i * 16},-${16 + i * 12} A${28 + i * 20},${28 + i * 20} 0 0 1 ${22 + i * 16},${16 + i * 12}" stroke="#34c759" stroke-width="5"/>`).join('')}</g>
+    <text x="680" y="-8" font-size="26" font-weight="700" fill="#2f9e5b" text-anchor="end" data-fade="${T(5, 1.7)},${T(5, 1.9)}">今天就约一个 →</text>
+  </svg>
+  <h2 data-rise="${T(5, .3)}">找人聊聊</h2>
+  <p data-rise="${T(5, .45)}">列出 <b>3 个</b>可以打电话的人，<br>今天就约其中一个。别一个人扛。</p>`;
+
+// 6 写下来
+const SCRIB = (x, y, w) => { const p = []; for (let i = 0; i <= 30; i++) p.push(`${(x + w * i / 30).toFixed(1)},${(y + Math.sin(i * 1.7) * 5 + Math.sin(i * .6) * 3).toFixed(1)}`); return 'M' + p.join(' L'); };
+C[6] = `${chip(6)}
+  <svg viewBox="0 0 880 330">
+    ${['第 1 天', '第 2 天', '第 3 天'].map((s, i) => `<g id="tab${i}"><rect x="${60 + i * 130}" y="0" width="118" height="46" rx="12" stroke-width="3"/><text x="${119 + i * 130}" y="32" font-size="24" font-weight="700" text-anchor="middle">${s}</text></g>`).join('')}
+    <rect class="w" x="40" y="60" width="360" height="266" rx="14"/><rect class="w" x="400" y="60" width="360" height="266" rx="14"/>
+    <text x="70" y="112" font-size="30" font-weight="700" font-family="Noto Serif SC">发生了什么？</text>
+    <text x="430" y="112" font-size="30" font-weight="700" font-family="Noto Serif SC">我学到了什么？</text>
+    ${[0, 1, 2, 3].map(i => `<path d="${SCRIB(72, 160 + i * 42, i === 3 ? 180 : 296)}" stroke-width="3.5" stroke="#6b6d73" pathLength="1" data-draw="${T(6, .6 + i * .28)},${T(6, .85 + i * .28)}"/>`).join('')}
+    ${[0, 1, 2, 3].map(i => `<path d="${SCRIB(432, 160 + i * 42, i === 3 ? 150 : 296)}" stroke-width="3.5" stroke="#6b6d73" pathLength="1" data-draw="${T(6, 1.8 + i * .28)},${T(6, 2.05 + i * .28)}"/>`).join('')}
+    <circle cx="832" cy="190" r="44" class="w" stroke="#e3e2dc" stroke-width="8"/>
+    <circle id="timerRing" cx="832" cy="190" r="44" stroke="#c8962e" stroke-width="8" pathLength="1" transform="rotate(-90 832 190)"/>
+    <text x="832" y="202" font-size="30" font-weight="700" font-family="Inter" text-anchor="middle">15'</text>
+  </svg>
+  <h2 data-rise="${T(6, .3)}">把它写下来</h2>
+  <p data-rise="${T(6, .45)}">连续 3 天，每天写 15 分钟：<br><b>发生了什么？我学到了什么？</b><br>把一团乱麻，写成一个故事。</p>`;
+
+// 7 找回自己
+const HOBBY = [
+  ['吉他', '<circle cx="0" cy="14" r="22" class="w"/><circle cx="0" cy="-8" r="16" class="w"/><line x1="0" y1="-24" x2="0" y2="-50"/><circle cx="0" cy="12" r="6" class="ink"/>'],
+  ['拍照', '<rect x="-34" y="-22" width="68" height="48" rx="10" class="w"/><circle cx="0" cy="2" r="14" class="w"/><rect x="-14" y="-32" width="24" height="10" rx="3" class="w"/>'],
+  ['读书', '<path class="w" d="M-38,-24 Q-19,-32 0,-22 Q19,-32 38,-24 L38,28 Q19,20 0,30 Q-19,20 -38,28Z"/><line x1="0" y1="-22" x2="0" y2="30"/>'],
+  ['跑步', `<g transform="scale(.75)"><path class="w" d="${SHOE}"/></g>`],
+  ['画画', '<path class="w" d="M-36,4 C-40,-30 20,-40 34,-14 C44,6 20,6 16,16 C12,30 -30,34 -36,4Z"/><circle cx="-16" cy="-12" r="6" fill="#e5412d" stroke="none"/><circle cx="4" cy="-20" r="6" fill="#2f80ed" stroke="none"/><circle cx="20" cy="-8" r="6" fill="#f2c94c" stroke="none"/>'],
+  ['养花', '<path class="w" d="M-24,6 L24,6 L18,36 L-18,36Z"/><line x1="0" y1="6" x2="0" y2="-26"/><path d="M0,-12 C-20,-14 -26,-30 -22,-38 C-10,-36 0,-26 0,-12Z" fill="#8fd19e"/><path d="M0,-20 C18,-24 26,-38 22,-46 C8,-44 0,-32 0,-20Z" fill="#8fd19e"/>'],
+];
+C[7] = `${chip(7)}
+  <svg viewBox="0 0 880 330">
+    ${HOBBY.map(([n, g], i) => `<g transform="translate(${80 + i * 144} 140)"><g data-pop="${T(7, .4 + i * .12)}" id="hob${i}">
+      <circle r="60" fill="#f3f1eb" stroke="none"/>${g}<text y="118" font-size="30" font-weight="500" text-anchor="middle">${n}</text></g></g>`).join('')}
+    <circle cx="224" cy="140" r="72" stroke="#c8962e" stroke-width="7" pathLength="1" data-draw="${T(7, 1.6)},${T(7, 2.0)}" transform="rotate(-90 224 140)"/>
+    ${tick(276, 84, T(7, 2.0), 22)}
+  </svg>
+  <h2 data-rise="${T(7, .3)}">把自己找回来</h2>
+  <p data-rise="${T(7, .45)}">捡回一件恋爱时放下的爱好。<br>再列一张清单：<b>我喜欢什么？想成为谁？</b></p>`;
+
+// 8 好转是波浪线
+const WAVE_PTS = []; for (let i = 0; i <= 120; i++) { const u = i / 120; WAVE_PTS.push([80 + u * 760, 272 - u * 190 + Math.sin(u * Math.PI * 5.2) * 34 * (1 - u * .4)]); }
+C[8] = `<div class="chip">记住这一点</div>
+  <svg viewBox="0 0 880 330">
+    <line x1="70" y1="300" x2="860" y2="300" stroke="#d8d8d3" stroke-width="3"/><line x1="70" y1="300" x2="70" y2="10" stroke="#d8d8d3" stroke-width="3"/>
+    <text x="860" y="334" font-size="24" text-anchor="end" fill="#8d8f95">时间</text><text x="86" y="26" font-size="24" fill="#8d8f95">心情</text>
+    <path id="wave" d="M${WAVE_PTS.map(p => p.map(v => v.toFixed(1)).join(',')).join(' L')}" stroke="#c8962e" stroke-width="7" pathLength="1" data-draw="${T(8, .2)},${T(8, 2.0)}"/>
+    <circle id="waveDot" r="13" fill="#c8962e" stroke="#fff" stroke-width="5"/>
+  </svg>
+  <h2 data-rise="${T(8, .2)}">好转是波浪线</h2>
+  <p data-rise="${T(8, .35)}">有反复很正常。难受的日子还会来，<br>但会<b>越来越少、越来越短</b>。</p>`;
+
+// 9 结尾
+C[9] = `<div class="chip">最后</div>
+  <h2 data-rise="${T(9, .25)}">裂过的地方，<br>会长出金色的纹路。</h2>
+  <p data-rise="${T(9, .5)}">慢慢来，你已经在修复了。</p>
+  <div class="help" data-rise="${T(9, .9)}">如果难受持续两周以上，或出现伤害自己的念头，请寻求专业帮助：<b>心理援助热线 <em>12356</em></b></div>`;
+
+const cardsEl = document.getElementById('cards');
+C.forEach((h, i) => cardsEl.insertAdjacentHTML('beforeend', `<div class="card" id="c${i}">${h}</div>`));
+
+/* ======================= 工具 ======================= */
+const $ = id => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, p) => a + (b - a) * p;
+const prog = (t, a, b) => clamp((t - a) / (b - a));
+const easeOut = p => 1 - Math.pow(1 - p, 3);
+const easeInOut = p => p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+const easeOutBack = p => { const c1 = 1.7, c3 = c1 + 1; return p <= 0 ? 0 : 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2); };
+const nums = s => s.split(',').map(Number);
+const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const mix = (a, b, p) => { const x = hex(a), y = hex(b); return `rgb(${x.map((v, i) => Math.round(lerp(v, y[i], p))).join(',')})`; };
+function keyed(t, keys) { // keys: [[t, value], ...] 数值插值，每段 0.7s 过渡
+  let v = keys[0][1];
+  for (const [kt, kv] of keys) { const p = easeInOut(prog(t, kt, kt + 0.7)); v = lerp(v, kv, p); }
+  return v;
+}
+
+const A = {
+  rise: [...document.querySelectorAll('[data-rise]')].map(el => [el, +el.dataset.rise]),
+  pop: [...document.querySelectorAll('[data-pop]')].map(el => [el, +el.dataset.pop]),
+  draw: [...document.querySelectorAll('[data-draw]')].map(el => [el, ...nums(el.dataset.draw)]),
+  fade: [...document.querySelectorAll('[data-fade]')].map(el => [el, ...nums(el.dataset.fade)]),
+  out: [...document.querySelectorAll('[data-out]')].map(el => [el, ...nums(el.dataset.out)]),
+};
+A.draw.forEach(([el]) => el.style.strokeDasharray = '1 1');
+['crack', 'crackB', 'seam0', 'seam1', 'seam2', 'timerRing'].forEach(id => $(id).style.strokeDasharray = '1 1');
+
+/* ======================= 音效事件 ======================= */
+const EVENTS = [{ t: 0.95, type: 'crack' }, { t: 1.25, type: 'shatter' }];
+CARDS.forEach(([s], i) => EVENTS.push({ t: s, type: 'swipe' }));
+TAGS.forEach((_, i) => EVENTS.push({ t: T(1, .55 + i * .38), type: 'pop' }));
+[.8, 1.2, 1.6].forEach(r => EVENTS.push({ t: T(2, r), type: 'toggle' }));
+[1.75, 2.0, 2.25].forEach(r => EVENTS.push({ t: T(2, r), type: 'whoosh' }));
+EVENTS.push({ t: T(2, 2.75), type: 'thud' });
+for (let i = 0; i < 6; i++) EVENTS.push({ t: T(3, .35 + i * .12), type: 'key' });
+EVENTS.push({ t: T(3, 1.35), type: 'deny' });
+[.9, 1.35, 1.8].forEach(r => EVENTS.push({ t: T(4, r), type: 'check' }));
+[.45, .65, .85].forEach(r => EVENTS.push({ t: T(5, r), type: 'pop' }));
+EVENTS.push({ t: T(5, 1.5), type: 'ring' });
+[.6, 1.8].forEach(r => EVENTS.push({ t: T(6, r), type: 'scribble', d: 1.1 }));
+HOBBY.forEach((_, i) => EVENTS.push({ t: T(7, .4 + i * .12), type: 'pop' }));
+EVENTS.push({ t: T(7, 2.0), type: 'check' });
+[1, 2, 3, 4].forEach(k => EVENTS.push({ t: T(k, .4), type: 'mend' }));
+[5, 6, 7].forEach(k => EVENTS.push({ t: T(k, .5), type: 'gold' }));
+EVENTS.push({ t: 37.1, type: 'final' });
+EVENTS.sort((a, b) => a.t - b.t);
+window.EVENTS = EVENTS;
+
+/* ======================= 渲染 ======================= */
+const SKY = [ // [时间, 中心色, 边缘色]
+  [0, '#2f3763', '#1b2140'], [12, '#4a4a82', '#2a2d58'], [21, '#f0a8a2', '#8b7fb3'],
+  [29, '#ffd9b0', '#f3a99a'], [35, '#fff3d6', '#a9d7ff'], [40, '#fff3d6', '#a9d7ff'],
+];
+function render(t) {
+  // 进度条：每一步 +12.5%，“好转是波浪线”时先回落再上升
+  const pct = keyed(t, [[0, 0], [T(1, .4), 12], [T(2, .4), 25], [T(3, .4), 37], [T(4, .4), 50], [T(5, .4), 62], [T(6, .4), 75], [T(7, .4), 87], [T(8, .3), 68], [T(8, 1.3), 94], [T(9, .2), 100]]);
+  $('pct').textContent = Math.round(pct) + '%';
+  $('barFill').style.width = pct + '%';
+
+  // 天空
+  let si = 0; while (si < SKY.length - 2 && t > SKY[si + 1][0]) si++;
+  const sp = easeInOut(prog(t, SKY[si][0], SKY[si + 1][0]));
+  $('sky0').setAttribute('stop-color', mix(SKY[si][1], SKY[si + 1][1], sp));
+  $('sky1').setAttribute('stop-color', mix(SKY[si][2], SKY[si + 1][2], sp));
+  $('stars').setAttribute('opacity', (1 - prog(t, 12, 21)) * (0.6 + 0.4 * Math.sin(t * 3)));
+  const rainA = 1 - prog(t, 8, 14);
+  $('rain').setAttribute('opacity', rainA);
+  if (rainA > 0) for (const l of $('rain').children) {
+    const x = +l.dataset.x, v = +l.dataset.v, y = 200 + ((+l.dataset.o + t * v) % 760);
+    l.setAttribute('x1', x); l.setAttribute('x2', x - 6); l.setAttribute('y1', y); l.setAttribute('y2', y + 34);
+  }
+  const sunP = easeInOut(prog(t, 22, 38));
+  $('sun').setAttribute('cy', lerp(1080, 430, sunP));
+  $('sun').setAttribute('r', lerp(130, 190, sunP));
+
+  // 瓷心：0.95s 裂开，第 1–4 步逐步拼回，第 5–7 步描金
+  const brk = easeOutBack(prog(t, 1.2, 1.75));
+  let heal = 0; [1, 2, 3, 4].forEach(k => heal += 0.25 * easeInOut(prog(t, T(k, .4), T(k, 1.3))));
+  const apart = brk * (1 - heal);
+  const float = Math.sin(t * 1.2) * 8;
+  const pre = t < 0.95 ? Math.sin(t * 40) * 3 * prog(t, 0.6, 0.95) : 0; // 碎之前的颤动
+  $('heart').setAttribute('transform', `translate(${540 + pre} ${560 + float}) scale(1.28)`);
+  for (const k in OFF) {
+    const [dx, dy, r] = OFF[k];
+    $('piece' + k).setAttribute('transform', `translate(${dx * apart} ${dy * apart}) rotate(${r * apart})`);
+  }
+  $('crack').style.strokeDashoffset = 1 - easeInOut(prog(t, 0.9, 1.2));
+  $('crackB').style.strokeDashoffset = 1 - easeInOut(prog(t, 1.0, 1.2));
+  $('crack').style.opacity = $('crackB').style.opacity = t < 1.25 ? 1 : 0;
+  document.querySelectorAll('#heart .edge').forEach(e => e.style.opacity = prog(t, 1.18, 1.26));
+  [5, 6, 7].forEach((k, i) => $('seam' + i).style.strokeDashoffset = 1 - easeInOut(prog(t, T(k, .5), T(k, 1.6))));
+  document.querySelector('#goldGrad').setAttribute('gradientTransform', `translate(${((t * 160) % 700) - 350} 0)`);
+
+  // 卡片切换：新卡从下方推上来，旧卡上移淡出
+  CARDS.forEach(([s, e], i) => {
+    const el = $('c' + i);
+    const pin = easeOut(prog(t, s, s + 0.6)), pout = easeInOut(prog(t, e, e + 0.5));
+    el.style.opacity = t < s || t > e + 0.5 ? 0 : Math.min(pin * 2.5, 1) * (1 - pout);
+    el.style.transform = `translateY(${(1 - pin) * 900 - pout * 160}px) scale(${1 - pout * .05})`;
+    el.style.visibility = t < s || t > e + 0.5 ? 'hidden' : 'visible';
+  });
+
+  // 通用动画
+  for (const [el, a] of A.rise) { const p = easeOut(prog(t, a, a + 0.5)); el.style.opacity = p; el.style.translate = `0 ${(1 - p) * 34}px`; }
+  for (const [el, a] of A.pop) { const p = prog(t, a, a + 0.4); el.style.opacity = p > 0 ? 1 : 0; if (!el.dataset.custom) el.style.transform = `scale(${easeOutBack(p)})`; }
+  for (const [el, a, b] of A.draw) el.style.strokeDashoffset = 1 - easeInOut(prog(t, a, b));
+  for (const [el, a, b] of A.fade) el.style.opacity = prog(t, a, b);
+  for (const [el, a, b] of A.out) el.style.opacity = 1 - prog(t, a, b);
+
+  /* ---- 1 允许难过 ---- */
+  const tearP = ((t - 3.2) % 1.3) / 1.3;
+  $('tear').setAttribute('transform', `translate(0 ${tearP * 60})`);
+  $('tear').setAttribute('opacity', t < T(1, 2.3) ? Math.sin(tearP * Math.PI) : 0);
+  let lvl = 0.92; TAGS.forEach((_, i) => lvl -= 0.13 * easeInOut(prog(t, T(1, .65 + i * .38), T(1, 1.0 + i * .38))));
+  const mh = 234 * lvl;
+  $('meter').setAttribute('y', 38 + 234 - mh); $('meter').setAttribute('height', mh);
+  $('meter').setAttribute('fill', mix('#e5705f', '#8fb0e6', 1 - (lvl - .4) / .52));
+
+  /* ---- 2 别看动态 ---- */
+  [[.8, 1, 0], [1.2, 0, 1], [1.6, 0, 1]].forEach(([r, from, to], i) => {
+    const p = easeInOut(prog(t, T(2, r), T(2, r + .25)));
+    const v = lerp(from, to, p);
+    const g = $('tg' + i);
+    g.querySelector('.trk').setAttribute('fill', mix('#d6d6d2', '#34c759', v));
+    g.querySelector('.knob').setAttribute('cx', 20 + v * 36);
+  });
+  [[420, 60], [510, 30], [610, 64]].forEach(([x, y], i) => {
+    const p = easeInOut(prog(t, T(2, 1.75 + i * .25), T(2, 2.25 + i * .25)));
+    const g = $('photo' + i);
+    const ap = prog(t, T(2, .6 + i * .12), T(2, .9 + i * .12));
+    g.setAttribute('transform', `translate(${lerp(x, 695, p)} ${lerp(y, 215, p) - Math.sin(p * Math.PI) * 50}) rotate(${lerp((i - 1) * 12, 0, p)}) scale(${easeOutBack(ap) * lerp(1, .45, p)})`);
+    g.setAttribute('opacity', 1 - prog(t, T(2, 2.2 + i * .25), T(2, 2.3 + i * .25)));
+  });
+  const lidP = easeOutBack(prog(t, T(2, 2.6), T(2, 2.9)));
+  $('lid').setAttribute('transform', `rotate(${lerp(-38, 0, lidP)} 546 163)`);
+
+  /* ---- 3 等 24 小时 ---- */
+  const msg = '我想你了……';
+  const typed = t < T(3, 1.6) ? Math.floor(clamp((t - T(3, .35)) / .75) * msg.length) : 0;
+  $('typing').textContent = msg.slice(0, typed);
+  $('sendBtn').setAttribute('opacity', t < T(3, 1.35) ? 1 : 0.2);
+
+  /* ---- 4 身体 ---- */
+  $('steam').setAttribute('transform', `translate(0 ${-((t * 20) % 12)})`);
+  $('steam').setAttribute('opacity', 0.5 + 0.5 * Math.sin(t * 4));
+
+  /* ---- 5 找人 ---- */
+  const call = t > T(5, 1.5);
+  document.querySelectorAll('#ringWaves .rw').forEach((w, i) => {
+    const p = ((t - T(5, 1.5)) * 1.6 - i * .25);
+    w.setAttribute('opacity', call ? clamp(Math.sin(clamp(p % 1) * Math.PI)) : 0);
+  });
+  const r0 = $('row0');
+  if (call) { r0.dataset.custom = 1; r0.style.transform = `scale(${1 + .03 * Math.sin(Math.PI * prog(t, T(5, 1.5), T(5, 1.8)))})`; }
+  r0.querySelector('rect').setAttribute('stroke', call ? '#c8962e' : '#1c1d21');
+  r0.querySelector('rect').setAttribute('stroke-width', call ? 6 : 3.5);
+
+  /* ---- 6 写下来 ---- */
+  const day = t < T(6, 1.5) ? 0 : t < T(6, 2.6) ? 1 : 2;
+  for (let i = 0; i < 3; i++) {
+    const tab = $('tab' + i), on = i === day;
+    tab.querySelector('rect').setAttribute('fill', on ? '#1c1d21' : '#fff');
+    tab.querySelector('text').style.fill = on ? '#fff' : '#8d8f95';
+  }
+  $('timerRing').style.strokeDashoffset = 1 - prog(t, T(6, .5), T(6, 3.8));
+
+  /* ---- 7 找回自己 ---- */
+  HOBBY.forEach((_, i) => { if (i !== 1) $('hob' + i).parentNode.setAttribute('opacity', 1 - .55 * prog(t, T(7, 1.6), T(7, 1.9))); });
+
+  /* ---- 8 波浪线 ---- */
+  const wp = easeInOut(prog(t, T(8, .2), T(8, 2.0)));
+  const wave = $('wave'), L = wave.getTotalLength(), pt = wave.getPointAtLength(L * wp);
+  $('waveDot').setAttribute('cx', pt.x); $('waveDot').setAttribute('cy', pt.y);
+  $('waveDot').setAttribute('opacity', prog(t, T(8, .2), T(8, .3)));
+
+  // 结尾
+  $('fade').style.opacity = easeInOut(prog(t, 39.3, 40));
+}
+window.render = render;
+window.DURATION = DURATION;
+
+/* ======================= 浏览器预览 ======================= */
+if (!navigator.webdriver) {
+  let t0 = performance.now(), paused = false, cur = 0;
+  const stage = $('stage');
+  const fit = () => { const s = Math.min(innerWidth / 1080, innerHeight / 1920); stage.style.transform = `scale(${s})`; stage.style.transformOrigin = '0 0'; };
+  addEventListener('resize', fit); fit();
+  addEventListener('keydown', e => {
+    if (e.code === 'Space') { paused = !paused; t0 = performance.now() - cur * 1000; }
+    if (e.code === 'ArrowRight') { cur = Math.min(DURATION, cur + 1); t0 = performance.now() - cur * 1000; }
+    if (e.code === 'ArrowLeft') { cur = Math.max(0, cur - 1); t0 = performance.now() - cur * 1000; }
+  });
+  const loop = () => { if (!paused) cur = ((performance.now() - t0) / 1000) % DURATION; render(cur); requestAnimationFrame(loop); };
+  document.fonts.ready.then(loop);
+} else {
+  render(0);
+}
+</script>
+</body>
+</html>
