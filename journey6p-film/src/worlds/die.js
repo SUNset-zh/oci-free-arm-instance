@@ -199,9 +199,11 @@ void main() {
     emit += vec3(0.25, 0.65, 1.0) * w * cell * (0.35 + 0.65 * mac) * 0.8 * uWave;
     emit += vec3(0.3, 0.6, 0.9) * cell * spark * 0.025 * uWave;
     // data lanes entering along rows
-    float lane = step(abs(pu.y - 0.5), 0.03) * (1.0 - sram);
-    float mv = step(0.8, fract(tl.x / 22.0 - uTime * 1.3 + pid.y * 0.37));
-    emit += vec3(0.4, 0.8, 1.0) * lane * mv * 0.8 * uWave;
+    float lw = max(0.006, fwidth(pu.y) * 0.8);
+    float lane = (1.0 - smoothstep(lw, lw * 2.0, abs(pu.y - 0.5))) * (1.0 - sram);
+    float ph2 = fract(tl.x / 30.0 - uTime * 1.3 + pid.y * 0.37);
+    float mv = smoothstep(0.55, 0.9, ph2) * (1.0 - smoothstep(0.9, 1.0, ph2));
+    emit += vec3(0.4, 0.8, 1.0) * lane * mv * 0.45 * uWave;
   }
 
   // Shading: key light + fake env + thin-film iridescence.

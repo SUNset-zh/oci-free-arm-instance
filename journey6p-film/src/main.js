@@ -181,7 +181,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Space') { e.preventDefault(); if (startEl.classList.contains('gone')) { clock.playing ? pause() : play(); } else begin(); }
   else if (e.code === 'ArrowRight') seek(clock.t + (e.shiftKey ? 0.5 : 3));
   else if (e.code === 'ArrowLeft') seek(clock.t - (e.shiftKey ? 0.5 : 3));
-  else if (e.code === 'KeyF') { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen?.(); }
+  else if (e.code === 'KeyF') { const p = document.fullscreenElement ? document.exitFullscreen?.() : document.documentElement.requestFullscreen?.(); p?.catch?.(() => {}); }
   else if (e.code === 'KeyM') score?.toggleMute();
   else if (e.code === 'KeyD') { P.debug = !P.debug; dbg.style.display = P.debug ? 'block' : 'none'; }
   else if (e.code === 'Home') seek(0);

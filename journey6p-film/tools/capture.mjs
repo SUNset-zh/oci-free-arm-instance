@@ -46,7 +46,7 @@ fs.writeFileSync(wav, Buffer.from(b64, 'base64'));
 console.log('score →', wav);
 
 const enc = spawn(ffmpeg, [
-  '-y', '-f', 'image2pipe', '-framerate', String(fps), '-c:v', 'mjpeg', '-i', '-',
+  '-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(fps), '-c:v', 'mjpeg', '-i', '-',
   '-ss', String(from), '-i', wav, '-t', String(to - from),
   '-c:v', 'libx264', '-preset', 'slow', '-crf', '15', '-pix_fmt', 'yuv420p', '-movflags', '+faststart',
   '-c:a', 'aac', '-b:a', '256k', '-shortest', outFile,

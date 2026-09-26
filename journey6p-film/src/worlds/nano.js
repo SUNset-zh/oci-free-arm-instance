@@ -81,7 +81,10 @@ void main() {
     float id = floor(x), f = fract(x);
     float on = step(0.72, h11(id + seed * 13.0));
     float pk = on * smoothstep(0.0, 0.04, f) * (1.0 - smoothstep(0.08, 0.3, f));
-    col += vec3(0.45, 0.8, 1.0) * pk * 2.2 * uFlow;
+    // a thin trail running along the top of the wire
+    float across = dir < 0.5 ? vL.z : vL.x;
+    float lane = (1.0 - smoothstep(0.08, 0.22, abs(across))) * step(0.5, N.y);
+    col += vec3(0.35, 0.75, 1.0) * pk * lane * 1.6 * uFlow;
   }
   // detail fades toward the edge of the modelled patch
   float r = length(vW.xz);
@@ -151,7 +154,7 @@ void main() {
   vec3 N = normalize(vN);
   vec3 V = normalize(uCamPos - vW);
   vec3 L = normalize(uKey);
-  vec3 base = vec3(0.2, 0.17, 0.14);
+  vec3 base = vec3(0.11, 0.1, 0.09);
   float nl = max(dot(N, L), 0.0);
   float sp = pow(max(dot(N, normalize(L + V)), 0.0), 50.0);
   float dc = length(uCamPos - vW);
@@ -159,8 +162,11 @@ void main() {
   float fres = pow(1.0 - max(dot(N, V), 0.0), 3.0);
   vec3 R = reflect(-V, N);
   float env = smoothstep(0.8, 0.97, dot(R, normalize(vec3(-0.45, 0.8, 0.4)))) + 0.4 * smoothstep(0.72, 0.95, dot(R, normalize(vec3(0.75, 0.3, -0.6))));
-  vec3 col = base * (0.05 + nl * 0.7 + att * 0.35) + vec3(0.75, 0.72, 0.68) * (sp * 0.4 + env * 0.25) + vec3(0.25, 0.3, 0.4) * fres * 0.2;
-  float e = mix(vOn * uSea * (1.0 - uIso), uTarget, vTgt);
+  vec3 col = base * (0.05 + nl * 0.7 + att * 0.3) + vec3(0.75, 0.72, 0.68) * (sp * 0.35 + env * 0.07) + vec3(0.25, 0.3, 0.4) * fres * 0.12;
+  // ON: a glowing ring where the gate wraps the fin (the channel it controls)
+  float dFin = length(max(vec2(abs(vW.z) - 3.5, vW.y - 62.0), 0.0));
+  float ring = exp(-dFin / 2.6);
+  float e = mix(vOn * uSea * (1.0 - uIso) * 0.6, uTarget * (0.06 + 1.4 * ring), vTgt);
   col += vec3(0.18, 0.55, 1.0) * e * 0.55;
   col *= mix(1.0, mix(0.35, 1.0, vTgt), uIso);
   gl_FragColor = vec4(col, 1.0);

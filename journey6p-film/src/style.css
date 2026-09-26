@@ -1,4 +1,5 @@
 :root {
+  color-scheme: dark;
   --u: 16px; /* 1% of stage width, set from JS */
   --ink: #eef1f4;
   --ink-dim: rgba(238, 241, 244, 0.62);

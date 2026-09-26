@@ -26,3 +26,15 @@ html = html
 fs.mkdirSync(path.dirname(out), { recursive: true });
 fs.writeFileSync(out, html);
 console.log(`dist/journey6p.html  ${(fs.statSync(out).size / 1024).toFixed(0)} KB`);
+// --fragment <file>: same page without the document skeleton (for hosts that add their own).
+const fi = process.argv.indexOf('--fragment');
+if (fi > 0) {
+  const frag = html
+    .replace(/<!doctype html>\s*/i, '')
+    .replace(/<html[^>]*>\s*/i, '').replace(/<\/html>\s*$/i, '')
+    .replace(/<head>\s*/i, '').replace(/<\/head>\s*/i, '')
+    .replace(/<meta charset[^>]*>\s*/i, '').replace(/<meta name="viewport"[^>]*>\s*/i, '')
+    .replace(/<body>\s*/i, '').replace(/<\/body>\s*/i, '');
+  fs.writeFileSync(process.argv[fi + 1], frag);
+  console.log(`fragment → ${process.argv[fi + 1]}`);
+}
