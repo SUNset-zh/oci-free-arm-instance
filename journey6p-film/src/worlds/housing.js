@@ -110,7 +110,7 @@ export function buildHousing(mats, { lowDetail = false } = {}) {
 
 export function housingMaterials(env) {
   return {
-    alu: new THREE.MeshStandardMaterial({ color: 0x8a8d92, metalness: 0.9, roughness: 0.42, envMap: env, envMapIntensity: 1 }),
+    alu: new THREE.MeshStandardMaterial({ color: 0x6d7075, metalness: 0.9, roughness: 0.55, envMap: env, envMapIntensity: 0.9 }),
     aluDark: new THREE.MeshStandardMaterial({ color: 0x3a3c40, metalness: 0.85, roughness: 0.38, envMap: env, envMapIntensity: 1 }),
     fin: new THREE.MeshStandardMaterial({ color: 0x4a4d52, metalness: 0.92, roughness: 0.3, envMap: env, envMapIntensity: 1.2 }),
     plasticDark: new THREE.MeshStandardMaterial({ color: 0x151618, metalness: 0.0, roughness: 0.55, envMap: env, envMapIntensity: 0.6 }),

@@ -4,6 +4,7 @@ import { RoundedBoxGeometry } from '../lib/rounded.js';
 import { buildCarBody, buildWheel, lightBar, paintMaterial, CAR } from './car.js';
 import { buildHousing, housingMaterials, HOUSING } from './housing.js';
 import { anchorFrom } from '../frames.js';
+import { collapseByMaterial, detailLayer } from '../lib/merge.js';
 
 // ROAD WORLD — a wet night expressway, in metres, centred on the hero car.
 // The environment scrolls past the car (so precision stays perfect near it).
@@ -80,7 +81,7 @@ void main() {
   float curb = 1.0 - asph - walk;
   vec2 q = vec2(p.x, zw);
   float n1 = fbm(q * 1.7), n2 = vnoise(q * 23.0), n3 = fbm(q * 0.11 + 3.1);
-  vec3 alb = vec3(0.032, 0.033, 0.036) * (0.75 + 0.5 * n1) * (0.85 + 0.3 * n2);
+  vec3 alb = vec3(0.024, 0.025, 0.028) * (0.75 + 0.5 * n1) * (0.85 + 0.3 * n2);
   // lane markings (retro-reflective paint)
   float mk = 0.0;
   float dash = step(fract(zw / 15.0), 0.4);
@@ -95,7 +96,7 @@ void main() {
   // sidewalk pavers
   vec2 pv = fract(vec2(p.x, zw) / vec2(0.6, 0.6));
   float grout = step(0.95, max(pv.x, pv.y));
-  alb = mix(alb, vec3(0.075, 0.074, 0.07) * (0.8 + 0.4 * n1) * (1.0 - grout * 0.5), walk);
+  alb = mix(alb, vec3(0.05, 0.049, 0.046) * (0.8 + 0.4 * n1) * (1.0 - grout * 0.5), walk);
   alb = mix(alb, vec3(0.1, 0.1, 0.1), curb);
   // wetness / puddles
   float puddle = smoothstep(0.52, 0.68, n3 + 0.12 * n1);
@@ -164,7 +165,7 @@ void main() {
 
 const BUILDING_VERT = /* glsl */`
 attribute vec3 aSize; attribute float aSeed;
-varying vec3 vLocal; varying vec3 vN; varying vec3 vW; varying float vSeed; varying vec3 vSize;
+varying vec3 vLocal; varying vec3 vN; varying vec3 vW; flat varying float vSeed; flat varying vec3 vSize;
 void main() {
   vec3 p = position * aSize; p.y += aSize.y * 0.5;
   vec4 w = modelMatrix * instanceMatrix * vec4(p, 1.0);
@@ -175,7 +176,7 @@ void main() {
 const BUILDING_FRAG = /* glsl */`
 precision highp float;
 uniform vec3 uCamPos; uniform vec3 uFog; uniform float uFogD; uniform float uWin;
-varying vec3 vLocal; varying vec3 vN; varying vec3 vW; varying float vSeed; varying vec3 vSize;
+varying vec3 vLocal; varying vec3 vN; varying vec3 vW; flat varying float vSeed; flat varying vec3 vSize;
 float h21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 void main() {
   vec2 uv; float roof = 0.0;
@@ -183,22 +184,24 @@ void main() {
   else if (abs(vN.z) > 0.5) uv = vec2(vLocal.x + vSize.x * 0.5, vLocal.y);
   else { uv = vLocal.xz; roof = 1.0; }
   float s = vSeed;
-  float fh = 3.4 + 0.8 * h21(vec2(s, 1.7));
-  float cw = 2.0 + 1.6 * h21(vec2(s, 3.1));
+  float fh = 3.2 + 0.6 * h21(vec2(s, 1.7));
+  float cw = 1.5 + 1.0 * h21(vec2(s, 3.1));
   vec2 cuv = uv / vec2(cw, fh);
   vec2 cell = floor(cuv);
   vec2 f = fract(cuv);
   vec2 fw = fwidth(cuv);
   float detail = 1.0 - smoothstep(0.18, 0.45, max(fw.x, fw.y));
   float style = h21(vec2(s, 9.2));
-  float wx = style > 0.6 ? 0.05 : 0.16;
-  float win = step(wx, f.x) * step(f.x, 1.0 - wx) * step(0.24, f.y) * step(f.y, 0.84);
+  float wx = style > 0.6 ? 0.08 : 0.2;
+  float win = step(wx, f.x) * step(f.x, 1.0 - wx) * step(0.3, f.y) * step(f.y, 0.82);
   // Lights come in clusters (offices / floors), most of the facade is dark.
   float grp = h21(vec2(floor(cell.x / 6.0) + s * 3.7, cell.y * 1.13));
-  float busy = 0.1 + 0.25 * h21(vec2(s, 5.5));
-  float lit = step(grp, busy) * step(0.25, h21(cell + s * 17.13));
+  float busy = 0.18 + 0.3 * h21(vec2(s, 5.5));
+  float lit = step(grp, busy) * step(0.2, h21(cell + s * 17.13));
   float warm = step(0.55, h21(vec2(floor(cell.x / 6.0), cell.y) + s));
-  vec3 wc = mix(vec3(0.72, 0.84, 1.0), vec3(1.0, 0.74, 0.46), warm) * (0.55 + 0.6 * h21(cell + 4.4));
+  vec3 wc = mix(vec3(0.6, 0.75, 1.0), vec3(1.0, 0.7, 0.42), warm) * (0.25 + 0.45 * h21(cell + 4.4));
+  // interior depth: lit rooms are brighter toward the window centre
+  wc *= 0.6 + 0.6 * (1.0 - length(f - vec2(0.5, 0.56)) * 1.4);
   vec3 col = vec3(0.006, 0.007, 0.009);
   col = mix(col, vec3(0.011, 0.013, 0.018), win);
   col += win * lit * wc * uWin * (1.0 - roof);
@@ -301,6 +304,7 @@ export class RoadWorld {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x020306);
     this.camera = new THREE.PerspectiveCamera(40, 16 / 9, 0.1, 2000);
+    this.camera.layers.enable(1); // detail layer (skipped by the road mirror)
     this.envs = envs;
     this.nearMul = 0.012; this.farMul = 4000; this.farMax = 1600; this.nearMin = 0.0004;
     this.fogColor = new THREE.Color(0x05070c);
@@ -439,6 +443,7 @@ export class RoadWorld {
 
     // --- pedestrian ---------------------------------------------------------
     this.ped = this.buildPedestrian();
+    detailLayer(this.ped);
     S.add(this.ped);
 
     // --- lidar ---------------------------------------------------------------
@@ -474,7 +479,7 @@ export class RoadWorld {
     rg.setAttribute('uv', new THREE.BufferAttribute(ruv, 2));
     rg.setIndex(ri);
     this.ribbonMat = new THREE.ShaderMaterial({
-      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
       uniforms: { uTime: { value: 0 }, uAlpha: { value: 0 } },
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0);} ',
       fragmentShader: RIBBON_FRAG,
@@ -521,7 +526,8 @@ export class RoadWorld {
     };
     const wheels = [];
     for (const z of CAR.wheelZ) for (const s of [-1, 1]) {
-      const w = buildWheel(wm);
+      const w = collapseByMaterial(buildWheel(wm));
+      detailLayer(w);
       w.position.set(s * CAR.track, CAR.wheelR, z);
       if (s < 0) w.rotation.y = Math.PI;
       root.add(w);
@@ -579,13 +585,19 @@ export class RoadWorld {
     inter.add(cons);
     const lid = new THREE.Mesh(new RoundedBoxGeometry(cw + 0.05, 0.03, 0.66, 3, 0.012), leather);
     lid.position.set(0, 0.5, 0.2);
+    lid.userData.keep = true;
     inter.add(lid);
+    collapseByMaterial(inter);
+    detailLayer(inter);
     bodyGroup.add(inter);
     car.consoleLid = lid;
 
     // The driving computer, in its own board frame (mm -> m).
     const hm = housingMaterials(this.envs.studio);
     const housing = buildHousing(hm, { lowDetail: true });
+    collapseByMaterial(housing.userData.base);
+    collapseByMaterial(housing.userData.conn);
+    detailLayer(housing);
     const boardRoot = new THREE.Group();
     boardRoot.matrixAutoUpdate = false;
     boardRoot.matrix.copy(BOARD_ANCHOR);
@@ -598,9 +610,10 @@ export class RoadWorld {
     boardRoot.add(this.pcbPlane);
     bodyGroup.add(boardRoot);
     // A cool key light that singles out the computer as we dive toward it.
-    const keyL = new THREE.PointLight(0xdce8ff, 0, 1.4, 2);
-    keyL.position.set(-0.12, 0.8, 0.55);
-    bodyGroup.add(keyL);
+    const keyL = new THREE.SpotLight(0xdce8ff, 0, 2.2, 0.32, 0.8, 2);
+    keyL.position.set(-0.25, 1.25, 0.05);
+    keyL.target.position.set(0, 0.42, 0.2);
+    bodyGroup.add(keyL, keyL.target);
     this.consoleLight = keyL;
     car.housing = housing;
     car.boardRoot = boardRoot;
@@ -772,6 +785,7 @@ export class RoadWorld {
       });
       const mesh = new THREE.Mesh(geo, m);
       mesh.frustumCulled = false;
+      mesh.layers.set(1);
       this.car.root.add(mesh);
       const end = conn(d.ci);
       return { mesh, m, def: d, end };
@@ -920,13 +934,13 @@ export class RoadWorld {
     this.lidar.visible = la > 0.001;
     // In the dark hook only perception is visible; the lit world fades in.
     const world = ctx.fx.worldLight;
-    this.roadMat.uniforms.uLampI.value = 17 * world;
+    this.roadMat.uniforms.uLampI.value = 9 * world;
     this.roadMat.uniforms.uHead.value = world;
     this.roadMat.uniforms.uAmb.value = 0.02 + 0.33 * world;
     this.bMat.uniforms.uWin.value = 1.1 * world;
     this.hemi.intensity = 0.25 * world;
     this.lampLights.forEach((L) => { L.intensity = 650 * world; });
-    this.consoleLight.intensity = 0.9 * ctx.fx.consoleLight;
+    this.consoleLight.intensity = 6 * ctx.fx.consoleLight;
     this.headSpot.intensity = 900 * world;
     this.headMesh.material.color.setRGB(1.0, 0.9, 0.78).multiplyScalar(28 * world);
     this.haloMesh.material.uniforms.uI.value = 0.35 * world;

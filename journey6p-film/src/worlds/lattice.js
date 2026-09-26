@@ -12,36 +12,39 @@ export const REGION = { x0: -170, x1: 120, y0: -46, z: 33 };
 const ATOM_VERT = /* glsl */`
 attribute vec3 aPos; attribute float aSeed;
 uniform float uR; uniform vec3 uHide;
-varying vec2 vUv; varying vec3 vC; varying float vSeed; varying float vHide;
+uniform float uHideAmt;
+varying vec2 vUv; varying vec3 vC; varying float vSeed; varying float vHide; varying float vR;
 void main() {
   vUv = position.xy;
   vec4 c = viewMatrix * modelMatrix * vec4(aPos, 1.0);
   vC = c.xyz; vSeed = aSeed;
   vHide = step(length(aPos - uHide), 0.01);
-  c.xy += position.xy * uR * 1.02;
+  // the target atom's solid sphere melts away as its electron cloud appears
+  vR = uR * (vHide > 0.5 ? max(0.0, 1.0 - uHideAmt * 1.15) : 1.0);
+  c.xy += position.xy * vR * 1.02;
   gl_Position = projectionMatrix * c;
 }`;
 const ATOM_FRAG = /* glsl */`
 precision highp float;
-uniform float uR; uniform mat4 projectionMatrix; uniform vec3 uKey; uniform float uHideAmt; uniform float uAlpha;
-varying vec2 vUv; varying vec3 vC; varying float vSeed; varying float vHide;
+uniform float uR; uniform mat4 projectionMatrix; uniform vec3 uKey; uniform float uHideAmt; uniform float uAlpha; uniform float uFogNear; uniform float uFogLen;
+varying vec2 vUv; varying vec3 vC; varying float vSeed; varying float vHide; varying float vR;
 void main() {
   float r2 = dot(vUv, vUv);
-  if (r2 > 1.0) discard;
-  if (vHide > 0.5 && uHideAmt > 0.999) discard;
+  if (r2 > 1.0 || vR < 0.001) discard;
   float z = sqrt(1.0 - r2);
   vec3 n = vec3(vUv, z);
-  vec3 p = vC + n * uR;
+  vec3 p = vC + n * vR;
   vec4 clip = projectionMatrix * vec4(p, 1.0);
   gl_FragDepth = clip.z / clip.w * 0.5 + 0.5;
   vec3 L = normalize(uKey);
   float diff = max(dot(n, L), 0.0);
   float rim = pow(1.0 - z, 2.5);
   float sp = pow(max(dot(n, normalize(L + vec3(0, 0, 1))), 0.0), 40.0);
-  vec3 base = vec3(0.46, 0.52, 0.62);
-  vec3 col = base * (0.08 + diff * 0.9) + vec3(0.55, 0.75, 1.0) * rim * 0.55 + vec3(1.0) * sp * 0.5;
-  float fade = vHide > 0.5 ? 1.0 - uHideAmt : 1.0;
-  gl_FragColor = vec4(col * fade * uAlpha, 1.0);
+  vec3 base = vec3(0.38, 0.45, 0.58);
+  vec3 col = base * (0.04 + diff * 0.85) + vec3(0.45, 0.7, 1.0) * rim * 0.7 + vec3(1.0) * sp * 0.6;
+  float fade = 1.0;
+  float depth = exp(-max(-vC.z - uFogNear, 0.0) / uFogLen);
+  gl_FragColor = vec4(col * fade * uAlpha * depth, 1.0);
 }`;
 
 const BOND_VERT = /* glsl */`
@@ -60,12 +63,13 @@ void main() {
 }`;
 const BOND_FRAG = /* glsl */`
 precision highp float;
-uniform float uAlpha;
+uniform float uAlpha; uniform float uFogNear; uniform float uFogLen;
 varying float vX; varying vec3 vMid;
 void main() {
   float s = sqrt(max(0.0, 1.0 - vX * vX));
-  vec3 col = vec3(0.24, 0.3, 0.4) * (0.25 + 0.75 * s) + vec3(0.35, 0.55, 0.8) * pow(1.0 - s, 3.0) * 0.4;
-  gl_FragColor = vec4(col * uAlpha, 1.0);
+  vec3 col = vec3(0.2, 0.28, 0.4) * (0.25 + 0.75 * s) + vec3(0.35, 0.55, 0.8) * pow(1.0 - s, 3.0) * 0.4;
+  float depth = exp(-max(-vMid.z - uFogNear, 0.0) / uFogLen);
+  gl_FragColor = vec4(col * uAlpha * depth, 1.0);
 }`;
 
 const CLOUD_VERT = /* glsl */`
@@ -158,7 +162,7 @@ export class LatticeWorld {
     ig.instanceCount = atoms.length;
     this.atomMat = new THREE.ShaderMaterial({
       vertexShader: ATOM_VERT, fragmentShader: ATOM_FRAG,
-      uniforms: { uR: { value: 0.58 }, uKey: { value: new THREE.Vector3(-0.4, 0.7, 0.6).normalize() }, uHide: { value: new THREE.Vector3(0, 0, 0) }, uHideAmt: { value: 0 }, uAlpha: { value: 1 } },
+      uniforms: { uR: { value: 0.42 }, uKey: { value: new THREE.Vector3(-0.4, 0.7, 0.6).normalize() }, uHide: { value: new THREE.Vector3(0, 0, 0) }, uHideAmt: { value: 0 }, uAlpha: { value: 1 }, uFogNear: { value: 10 }, uFogLen: { value: 40 } },
     });
     this.atomMesh = new THREE.Mesh(ig, this.atomMat);
     this.atomMesh.frustumCulled = false;
@@ -174,7 +178,7 @@ export class LatticeWorld {
     bg.setAttribute('aA', new THREE.InstancedBufferAttribute(aA, 3));
     bg.setAttribute('aB', new THREE.InstancedBufferAttribute(aB, 3));
     bg.instanceCount = bonds.length;
-    this.bondMat = new THREE.ShaderMaterial({ vertexShader: BOND_VERT, fragmentShader: BOND_FRAG, uniforms: { uW: { value: 0.13 }, uAlpha: { value: 1 } } });
+    this.bondMat = new THREE.ShaderMaterial({ vertexShader: BOND_VERT, fragmentShader: BOND_FRAG, uniforms: { uW: { value: 0.11 }, uAlpha: { value: 1 }, uFogNear: this.atomMat.uniforms.uFogNear, uFogLen: this.atomMat.uniforms.uFogLen } });
     this.bondMesh = new THREE.Mesh(bg, this.bondMat);
     this.bondMesh.frustumCulled = false;
     this.scene.add(this.bondMesh);
@@ -267,6 +271,9 @@ export class LatticeWorld {
     this.nucleus.material.color.setRGB(1.0, 0.92, 0.8).multiplyScalar(30 * ca);
     this.atomMat.uniforms.uHideAmt.value = ca;
     this.atomMat.uniforms.uAlpha.value = ctx.fx.latAlpha ?? 1;
+    // Depth haze scales with how far we are looking (keeps the crystal legible).
+    this.atomMat.uniforms.uFogNear.value = pose.focus * 1.2;
+    this.atomMat.uniforms.uFogLen.value = Math.max(8, pose.focus * 3);
     this.bondMat.uniforms.uAlpha.value = ctx.fx.latAlpha ?? 1;
     // Electrons drift along +x through the channels.
     const ev = ctx.fx.latElectrons ?? 0;

@@ -56,7 +56,7 @@ function floorplan() {
 }
 
 const DIE_VERT = /* glsl */`
-varying vec3 vW; varying vec3 vN; varying float vTile; varying vec2 vTileC; varying vec2 vTileG;
+varying vec3 vW; varying vec3 vN; flat varying float vTile; flat varying vec2 vTileC; flat varying vec2 vTileG;
 attribute float aTile; attribute vec2 aTileC; attribute vec2 aTileG;
 void main() {
   vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0);
@@ -73,7 +73,7 @@ uniform vec4 uBlocks[40]; uniform vec2 uBlockInfo[40]; uniform int uNB;
 uniform vec4 uCluster; // x0 (A), x0 (B), z0, unused
 uniform vec4 uTile; // px, pz, tw, td
 uniform float uBake;
-varying vec3 vW; varying vec3 vN; varying float vTile; varying vec2 vTileC; varying vec2 vTileG;
+varying vec3 vW; varying vec3 vN; flat varying float vTile; flat varying vec2 vTileC; flat varying vec2 vTileG;
 
 float h21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 float vnoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -179,7 +179,7 @@ void main() {
     float sram = step(0.72, pu.x);
     float mac = grid(tl, pe.x / 12.0, 0.25);
     vec3 macc = mix(vec3(0.07, 0.065, 0.08), vec3(0.2, 0.16, 0.12), mac * 0.7 + vnoise(tl / 2.0) * 0.3);
-    vec3 src = mix(vec3(0.12, 0.12, 0.16), vec3(0.26, 0.26, 0.34), grid(tl, 1.6, 0.3));
+    vec3 src = mix(vec3(0.08, 0.08, 0.11), vec3(0.16, 0.16, 0.22), grid(tl, 1.6, 0.3));
     alb = mix(macc, src, sram);
     alb = mix(alb, vec3(0.03, 0.03, 0.035), ch);
     metal = 0.6;
@@ -191,11 +191,13 @@ void main() {
     metal = mix(metal, 0.95, mvis * m8);
     // systolic activity: a diagonal wavefront sweeping the array
     vec2 g = vTileG * 16.0 + pid;
-    float ph = (g.x + g.y) / 60.0 - uTime * 0.55;
-    float w = exp(-pow(fract(ph) - 0.5, 2.0) * 90.0);
-    float w2 = exp(-pow(fract(ph * 2.0 + 0.3) - 0.5, 2.0) * 160.0) * 0.4;
-    float cell = (1.0 - ch) * (1.0 - sram) * (0.6 + 0.4 * h21(pid + vTileG * 17.0));
-    emit += vec3(0.35, 0.75, 1.0) * (w + w2) * cell * 2.2 * uWave;
+    float ph = (g.x + g.y) / 48.0 - uTime * 0.6;
+    float fr = fract(ph);
+    float w = smoothstep(0.0, 0.012, fr) * exp(-fr * 16.0); // sharp front, short trail
+    float spark = step(0.55, h21(pid + vTileG * 17.0 + floor(uTime * 6.0)));
+    float cell = (1.0 - ch) * (1.0 - sram) * (0.35 + 0.65 * spark);
+    emit += vec3(0.25, 0.65, 1.0) * w * cell * (0.35 + 0.65 * mac) * 0.8 * uWave;
+    emit += vec3(0.3, 0.6, 0.9) * cell * spark * 0.025 * uWave;
     // data lanes entering along rows
     float lane = step(abs(pu.y - 0.5), 0.03) * (1.0 - sram);
     float mv = step(0.8, fract(tl.x / 22.0 - uTime * 1.3 + pid.y * 0.37));
@@ -286,7 +288,7 @@ export class DieWorld {
     cam.lookAt(0, 0, 0);
     this.mat.uniforms.uTime.value = 26;
     this.mat.uniforms.uCamPos.value.set(0, 30000, 0);
-    this.mat.uniforms.uWave.value = 0.6;
+    this.mat.uniforms.uWave.value = 0.12;
     renderer.setRenderTarget(rt);
     renderer.clear();
     renderer.render(this.scene, cam);

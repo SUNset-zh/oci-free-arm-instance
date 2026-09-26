@@ -19,7 +19,7 @@ export const LAYERS = [
   { n: 'M8', d: 'z', p: 4000, w: 2000, t: 2400, y: 4400 },
 ];
 export const FIN = { w: 7, top: 62, sti: 20, pitch: 30 };
-export const GATE = { pitch: 54, len: 16, top: 95 };
+export const GATE = { pitch: 54, len: 16, top: 80 };
 export const CELL = { h: 240, zc: 30 };
 export const TGATE_X = -27; // the transistor we visit (gate over fin z = 0)
 // Lattice frame (ångström) sits on the top surface of our fin, in the drain.
@@ -27,7 +27,7 @@ export const LAT_ANCHOR = anchorFrom({ position: [0, FIN.top, 0], scale: 0.1 });
 
 const WIRE_VERT = /* glsl */`
 attribute vec4 aInfo; // dir (0 x, 1 z, 2 via), pitch, seed, extent
-varying vec3 vW; varying vec3 vN; varying vec4 vInfo; varying vec3 vL;
+varying vec3 vW; varying vec3 vN; flat varying vec4 vInfo; varying vec3 vL;
 void main() {
   vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0);
   vW = w.xyz; vL = position;
@@ -39,26 +39,40 @@ void main() {
 const WIRE_FRAG = /* glsl */`
 precision highp float;
 uniform vec3 uCamPos; uniform vec3 uKey; uniform float uTime; uniform float uFlow; uniform float uLightR;
-uniform vec3 uBase; uniform float uFade; uniform float uFogScale;
-varying vec3 vW; varying vec3 vN; varying vec4 vInfo; varying vec3 vL;
+uniform vec3 uBase; uniform float uFade; uniform float uFogScale; uniform vec3 uLampPos; uniform float uClip;
+varying vec3 vW; varying vec3 vN; flat varying vec4 vInfo; varying vec3 vL;
 float h11(float p) { return fract(sin(p * 78.233) * 43758.5453); }
 void main() {
   vec3 N = normalize(vN);
   vec3 V = normalize(uCamPos - vW);
   vec3 L = normalize(uKey);
   vec3 cu = uBase;
-  // key + camera lamp
-  float nl = max(dot(N, L), 0.0);
+  // Copper is a metal: no diffuse, colour lives in the reflections.
   vec3 H = normalize(L + V);
-  float sp = pow(max(dot(N, H), 0.0), 70.0);
-  vec3 toC = uCamPos - vW;
-  float dc = length(toC);
-  vec3 Lc = toC / dc;
-  float att = 1.0 / (1.0 + pow(dc / uLightR, 2.0));
+  float nh = max(dot(N, H), 0.0);
+  float sp = pow(nh, 90.0) * 4.0 + pow(nh, 12.0) * 0.18;
+  float dc = length(uCamPos - vW);
+  // Wires that come too close to the lens dissolve (dithered) instead of clipping.
+  float dz = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+  if (dc < uClip * (0.75 + 0.5 * dz)) discard;
+  vec3 toL = uLampPos - vW;
+  float dl = length(toL);
+  vec3 Lc = toL / dl;
+  float att = 1.0 / (1.0 + pow(dl / uLightR, 2.0));
   float nlc = max(dot(N, Lc), 0.0);
-  float spc = pow(max(dot(N, normalize(Lc + V)), 0.0), 50.0);
-  float fres = pow(1.0 - max(dot(N, V), 0.0), 4.0);
-  vec3 col = cu * (0.035 + nl * 0.55 + nlc * att * 1.4) + cu * (sp * 1.6 + spc * att * 2.2) + vec3(0.18, 0.22, 0.3) * fres * 0.25;
+  float spc = pow(max(dot(N, normalize(Lc + V)), 0.0), 60.0);
+  // Procedural studio reflections: two soft boxes and a dim gradient.
+  vec3 R = reflect(-V, N);
+  float e1 = smoothstep(0.8, 0.97, dot(R, normalize(vec3(-0.45, 0.8, 0.4))));
+  float e2 = smoothstep(0.72, 0.95, dot(R, normalize(vec3(0.75, 0.3, -0.6))));
+  float e3 = smoothstep(0.9, 0.99, dot(R, normalize(vec3(0.1, 0.45, 0.9))));
+  float grad = 0.015 + 0.05 * smoothstep(-0.3, 1.0, R.y);
+  vec3 env = vec3(1.0, 0.98, 0.95) * (e1 * 1.3 + e2 * 0.55 + e3 * 0.8 + grad);
+  float fr = pow(1.0 - max(dot(N, V), 0.0), 5.0);
+  vec3 F = cu + (vec3(1.0) - cu) * fr;
+  vec3 col = F * env + cu * (sp * max(dot(N, L), 0.0) * 0.6 + spc * 2.0 * att);
+  // lit edges of the wire tops read as fine bright lines
+  col += cu * smoothstep(0.35, 0.5, max(abs(vL.x), abs(vL.z))) * step(0.5, N.y) * 0.25 * (0.3 + att);
   // current pulses travelling along the wire
   float dir = vInfo.x, pitch = vInfo.y, seed = vInfo.z;
   if (dir < 1.5) {
@@ -74,7 +88,7 @@ void main() {
   float fade = smoothstep(vInfo.w, vInfo.w * 0.45, r);
   // depth haze relative to the current viewing scale
   float fog = 1.0 - exp(-dc / uFogScale);
-  col = mix(col, vec3(0.0), fog * 0.85);
+  col = mix(col, vec3(0.0), fog);
   gl_FragColor = vec4(col * fade * uFade, 1.0);
 }`;
 
@@ -88,7 +102,7 @@ void main() {
 const FIN_FRAG = /* glsl */`
 precision highp float;
 uniform vec3 uCamPos; uniform vec3 uKey; uniform float uOn; uniform float uAlpha; uniform float uAtoms;
-uniform float uLightR;
+uniform float uLightR; uniform float uInside;
 varying vec3 vW; varying vec3 vN;
 float grid(vec2 p, float period) {
   vec2 f = abs(fract(p / period) - 0.5);
@@ -102,11 +116,15 @@ void main() {
   if (!gl_FrontFacing) N = -N;
   vec3 V = normalize(uCamPos - vW);
   float fres = pow(1.0 - abs(dot(N, V)), 2.5);
-  vec3 si = vec3(0.22, 0.3, 0.42);
+  vec3 si = vec3(0.12, 0.2, 0.34);
   float nl = max(dot(N, normalize(uKey)), 0.0);
   float dc = length(uCamPos - vW);
   float att = 1.0 / (1.0 + pow(dc / uLightR, 2.0));
-  vec3 col = si * (0.15 + nl * 0.5 + att * 0.6) * (0.35 + fres);
+  vec3 col = si * (0.35 + nl * 0.9 + att * 0.4) * (0.45 + fres * 1.4);
+  col += vec3(0.3, 0.6, 1.0) * pow(fres, 2.0) * 0.6;
+  // glowing ridge along the fin top
+  col += vec3(0.35, 0.65, 1.0) * smoothstep(59.5, 62.0, vW.y) * 0.4 * (gl_FrontFacing ? 1.0 : 0.2);
+  if (!gl_FrontFacing) col *= 0.3;
   // doped source/drain regions read slightly warmer
   float sd = 1.0 - smoothstep(6.0, 9.0, abs(mod(vW.x + 27.0, 54.0) - 27.0));
   col = mix(col, col * vec3(1.25, 1.05, 0.85), sd * 0.6);
@@ -117,7 +135,10 @@ void main() {
   // conducting channel under our gate when ON
   float ch = (1.0 - smoothstep(7.0, 10.0, abs(vW.x + 27.0))) * (1.0 - smoothstep(4.0, 6.0, abs(vW.z)));
   col += vec3(0.35, 0.75, 1.0) * ch * uOn * 0.9;
-  float a = clamp(0.35 + fres * 0.65, 0.0, 1.0) * uAlpha;
+  float a = clamp(0.28 + fres * 0.6, 0.0, 1.0) * uAlpha;
+  if (!gl_FrontFacing) a *= 0.4;
+  // from inside our fin, the neighbours recede so the tunnel stays dark
+  a *= mix(1.0, 0.18, uInside * step(5.0, abs(vW.z)));
   gl_FragColor = vec4(col * a, a);
 }`;
 
@@ -125,36 +146,39 @@ const GATE_FRAG = /* glsl */`
 precision highp float;
 uniform vec3 uCamPos; uniform vec3 uKey; uniform float uTime; uniform float uTarget; uniform float uSea; uniform float uLightR;
 uniform float uIso;
-varying vec3 vW; varying vec3 vN; varying float vSeed; varying float vTgt;
-float h11(float p) { return fract(sin(p * 78.233) * 43758.5453); }
+varying vec3 vW; varying vec3 vN; flat varying float vOn; flat varying float vTgt;
 void main() {
   vec3 N = normalize(vN);
   vec3 V = normalize(uCamPos - vW);
   vec3 L = normalize(uKey);
-  vec3 base = vec3(0.16, 0.17, 0.2);
+  vec3 base = vec3(0.2, 0.17, 0.14);
   float nl = max(dot(N, L), 0.0);
-  float sp = pow(max(dot(N, normalize(L + V)), 0.0), 40.0);
+  float sp = pow(max(dot(N, normalize(L + V)), 0.0), 50.0);
   float dc = length(uCamPos - vW);
   float att = 1.0 / (1.0 + pow(dc / uLightR, 2.0));
   float fres = pow(1.0 - max(dot(N, V), 0.0), 3.0);
-  vec3 col = base * (0.08 + nl * 0.7 + att * 0.9) + vec3(0.8) * sp * 0.4 + vec3(0.2, 0.25, 0.35) * fres * 0.3;
-  // switching activity: each gate flips on/off at its own rhythm
-  float rate = 1.5 + 3.0 * h11(vSeed);
-  float ph = uTime * rate + h11(vSeed + 3.0) * 10.0;
-  float on = smoothstep(0.35, 0.5, fract(ph)) * (1.0 - smoothstep(0.85, 1.0, fract(ph)));
-  on *= step(0.25, h11(vSeed + 7.0));
-  float e = mix(on * uSea * (1.0 - uIso), uTarget, vTgt);
-  col += vec3(0.3, 0.7, 1.0) * e * 1.25;
+  vec3 R = reflect(-V, N);
+  float env = smoothstep(0.8, 0.97, dot(R, normalize(vec3(-0.45, 0.8, 0.4)))) + 0.4 * smoothstep(0.72, 0.95, dot(R, normalize(vec3(0.75, 0.3, -0.6))));
+  vec3 col = base * (0.05 + nl * 0.7 + att * 0.35) + vec3(0.75, 0.72, 0.68) * (sp * 0.4 + env * 0.25) + vec3(0.25, 0.3, 0.4) * fres * 0.2;
+  float e = mix(vOn * uSea * (1.0 - uIso), uTarget, vTgt);
+  col += vec3(0.18, 0.55, 1.0) * e * 0.55;
   col *= mix(1.0, mix(0.35, 1.0, vTgt), uIso);
   gl_FragColor = vec4(col, 1.0);
 }`;
 const GATE_VERT = /* glsl */`
 attribute float aSeed; attribute float aTgt;
-varying vec3 vW; varying vec3 vN; varying float vSeed; varying float vTgt;
+uniform float uTime;
+varying vec3 vW; varying vec3 vN; flat varying float vOn; flat varying float vTgt;
+float h11v(float p) { return fract(sin(p * 78.233) * 43758.5453); }
 void main() {
   vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0);
   vW = w.xyz; vN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * normal);
-  vSeed = aSeed; vTgt = aTgt;
+  // each gate flips on/off at its own rhythm (computed once per instance)
+  float rate = 1.5 + 3.0 * h11v(aSeed);
+  float ph = uTime * rate + h11v(aSeed + 3.0) * 10.0;
+  float on = smoothstep(0.35, 0.5, fract(ph)) * (1.0 - smoothstep(0.85, 1.0, fract(ph)));
+  vOn = on * step(0.25, h11v(aSeed + 7.0));
+  vTgt = aTgt;
   gl_Position = projectionMatrix * viewMatrix * w;
 }`;
 
@@ -163,9 +187,11 @@ attribute float aBright;
 uniform float uSize;
 varying vec2 vUv; varying float vB;
 void main() {
-  vUv = uv; vB = aBright;
+  vUv = uv;
   vec4 c = viewMatrix * modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
-  c.xy += position.xy * uSize;
+  float near = clamp(-c.z / (uSize * 6.0), 0.15, 1.0);
+  vB = aBright * near;
+  c.xy += position.xy * uSize * near;
   gl_Position = projectionMatrix * c;
 }`;
 const E_FRAG = /* glsl */`
@@ -199,6 +225,7 @@ export class NanoWorld {
       uniforms: {
         uCamPos: { value: new THREE.Vector3() }, uKey: { value: key }, uTime: { value: 0 }, uFlow: { value: 1 },
         uLightR: { value: 1000 }, uBase: { value: new THREE.Color(0.95, 0.58, 0.4) }, uFade: { value: 1 }, uFogScale: { value: 1e5 },
+        uLampPos: { value: new THREE.Vector3() }, uClip: { value: 0 },
       },
     });
     // --- metal layers ------------------------------------------------------
@@ -274,7 +301,7 @@ export class NanoWorld {
     // Fins (translucent crystal).
     this.finMat = new THREE.ShaderMaterial({
       vertexShader: FIN_VERT, fragmentShader: FIN_FRAG, transparent: true, depthWrite: false, side: THREE.DoubleSide,
-      uniforms: { uCamPos: { value: new THREE.Vector3() }, uKey: { value: key }, uOn: { value: 0 }, uAlpha: { value: 1 }, uAtoms: { value: 0 }, uLightR: { value: 200 } },
+      uniforms: { uCamPos: { value: new THREE.Vector3() }, uKey: { value: key }, uOn: { value: 0 }, uAlpha: { value: 1 }, uAtoms: { value: 0 }, uLightR: { value: 200 }, uInside: { value: 0 } },
     });
     const finZ = [];
     for (const row of ROWS) {
@@ -340,7 +367,7 @@ export class NanoWorld {
       sp.setMatrixAt(si++, m);
     }
     sp.renderOrder = 1;
-    this.fe.add(sp);
+    // (spacers kept out of the scene: they cluttered the read of fin vs gate)
     // Trench contacts on some source/drain regions (never in the shaft).
     const cMat = new THREE.MeshStandardMaterial({ color: 0x8e939c, roughness: 0.35, metalness: 1, envMap: this.envs.lab });
     const contacts = [];
@@ -353,7 +380,7 @@ export class NanoWorld {
       contacts.push({ x, z: zc + n * 45 + (n > 0 ? 30 : -30) * 0.5 });
     }
     const cm = new THREE.InstancedMesh(box.clone(), cMat, contacts.length);
-    contacts.forEach((c, k) => { m.compose(new THREE.Vector3(c.x, (FIN.top + 150) / 2, c.z), q, new THREE.Vector3(14, 150 - FIN.top, 40)); cm.setMatrixAt(k, m); });
+    contacts.forEach((c, k) => { m.compose(new THREE.Vector3(c.x, (FIN.top + 116) / 2, c.z), q, new THREE.Vector3(12, 116 - FIN.top, 36)); cm.setMatrixAt(k, m); });
     this.fe.add(cm);
 
     // --- electrons -------------------------------------------------------------
@@ -392,8 +419,16 @@ export class NanoWorld {
     wu.uCamPos.value.copy(cam);
     wu.uTime.value = t;
     wu.uLightR.value = Math.max(40, pose.focus * 1.2);
-    wu.uFogScale.value = Math.max(60, pose.focus * 4);
+    // Lamp rides above-left of the camera, off the lens axis, so surfaces model.
+    const camObj = this.camera;
+    const off = new THREE.Vector3(-0.55, 0.45, 0.25).multiplyScalar(pose.focus * 0.6);
+    wu.uLampPos.value.copy(cam).add(off);
+    wu.uClip.value = Math.max(0, cam.y - FIN.top) * 0.12;
+    wu.uFogScale.value = Math.max(60, pose.focus * 1.8);
     wu.uFlow.value = ctx.fx.wireFlow ?? 1;
+    const cut = ctx.fx.metal ?? 1;
+    wu.uFade.value = cut;
+    this.wires.visible = cut > 0.003;
     // Front end only matters once we are low enough.
     this.fe.visible = cam.y < 9000;
     const on = this.gateOn(t);
@@ -402,6 +437,7 @@ export class NanoWorld {
     fu.uOn.value = on * (ctx.fx.channel ?? 1);
     fu.uLightR.value = Math.max(20, pose.focus * 1.5);
     fu.uAtoms.value = smooth((25 - pose.focus) / 18);
+    fu.uInside.value = (Math.abs(cam.z) < 6 && cam.y < FIN.top + 3) ? 1 : 0;
     const gu = this.gateMat.uniforms;
     gu.uCamPos.value.copy(cam);
     gu.uTime.value = t;

@@ -4,6 +4,7 @@ import { RoundedBoxGeometry } from '../lib/rounded.js';
 import { canvasTexture } from '../lib/env.js';
 import { buildHousing, housingMaterials, HOUSING, fins } from './housing.js';
 import { anchorFrom } from '../frames.js';
+import { collapseByMaterial } from '../lib/merge.js';
 
 // BOARD WORLD — the driving computer, in millimetres.
 // PCB top at y = 0, SoC (Journey 6P package) centred at the origin.
@@ -38,7 +39,7 @@ export function pkgState(t) {
 
 const TRACE_VERT = /* glsl */`
 attribute float aS; attribute float aSeed; attribute float aDir;
-varying float vS; varying float vSeed; varying vec3 vW; varying vec3 vN;
+varying float vS; flat varying float vSeed; varying vec3 vW; varying vec3 vN;
 void main() {
   vS = aS; vSeed = aSeed;
   vec4 w = modelMatrix * vec4(position, 1.0);
@@ -48,27 +49,27 @@ void main() {
 const TRACE_FRAG = /* glsl */`
 precision highp float;
 uniform float uTime; uniform float uFlow; uniform vec3 uCamPos; uniform vec3 uKey;
-varying float vS; varying float vSeed; varying vec3 vW; varying vec3 vN;
+varying float vS; flat varying float vSeed; varying vec3 vW; varying vec3 vN;
 float h11(float p) { return fract(sin(p * 78.233) * 43758.5453); }
 void main() {
   vec3 V = normalize(uCamPos - vW);
   vec3 N = normalize(vN);
   // copper under glossy solder mask
-  vec3 base = vec3(0.028, 0.05, 0.036);
+  vec3 base = vec3(0.07, 0.11, 0.085);
   float diff = max(dot(N, normalize(uKey)), 0.0);
   vec3 H = normalize(normalize(uKey) + V);
-  float spec = pow(max(dot(N, H), 0.0), 90.0) * 1.2;
-  float fres = pow(1.0 - max(dot(N, V), 0.0), 4.0);
-  vec3 col = base * (0.25 + diff * 1.4) + vec3(0.7, 0.85, 0.8) * spec * 0.25 + vec3(0.06, 0.1, 0.09) * fres;
-  // data packets
-  float x = vS * 0.9 - uTime * 42.0 * 0.9 + vSeed * 17.0;
+  float spec = pow(max(dot(N, H), 0.0), 60.0);
+  float fres = pow(1.0 - max(dot(N, V), 0.0), 3.0);
+  vec3 col = base * (0.35 + diff * 1.3) + vec3(0.75, 0.9, 0.85) * spec * 0.5 + vec3(0.12, 0.2, 0.18) * fres;
+  // data packets: streaks travelling toward the SoC
+  float x = vS * 0.36 - uTime * 42.0 * 0.36 + vSeed * 17.0;
   float id = floor(x);
   float f = fract(x);
-  float on = step(0.35, h11(id * 1.7 + vSeed * 3.1));
-  float len = 0.18 + 0.25 * h11(id + 9.1);
-  float pk = on * smoothstep(0.0, 0.03, f) * (1.0 - smoothstep(len * 0.4, len, f));
-  col += vec3(0.45, 0.85, 1.0) * pk * 6.0 * uFlow;
-  col += vec3(0.25, 0.55, 0.8) * 0.04 * uFlow;
+  float on = step(0.3, h11(id * 1.7 + vSeed * 3.1));
+  float len = 0.28 + 0.3 * h11(id + 9.1);
+  float pk = on * smoothstep(0.0, 0.02, f) * (1.0 - smoothstep(0.0, len, f));
+  col += vec3(0.45, 0.85, 1.0) * pk * 7.0 * uFlow;
+  col += vec3(0.25, 0.6, 0.85) * 0.07 * uFlow;
   gl_FragColor = vec4(col, 1.0);
 }`;
 
@@ -91,7 +92,7 @@ export class BoardWorld {
     const r = rng(1234);
 
     // ---------------------------------------------------------------- lights
-    const key = new THREE.DirectionalLight(0xfff4e8, 2.4);
+    const key = new THREE.DirectionalLight(0xfff4e8, 1.9);
     key.position.set(-120, 260, 140);
     key.castShadow = true;
     key.shadow.mapSize.set(2048, 2048);
@@ -112,6 +113,8 @@ export class BoardWorld {
     // ---------------------------------------------------------------- housing
     this.hm = housingMaterials(env);
     this.housing = buildHousing(this.hm);
+    collapseByMaterial(this.housing.userData.base);
+    collapseByMaterial(this.housing.userData.conn);
     this.housing.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     S.add(this.housing);
 
@@ -119,9 +122,32 @@ export class BoardWorld {
     this.layout = this.planLayout(r);
     const { color, bump } = this.pcbTextures(this.layout);
     this.pcbMat = new THREE.MeshPhysicalMaterial({
-      map: color, bumpMap: bump, bumpScale: 1.4, roughness: 0.42, metalness: 0.0,
-      clearcoat: 0.7, clearcoatRoughness: 0.22, envMap: env, envMapIntensity: 0.9,
+      map: color, bumpMap: bump, bumpScale: 1.4, roughness: 0.5, metalness: 0.0,
+      clearcoat: 0.45, clearcoatRoughness: 0.3, envMap: env, envMapIntensity: 0.8,
     });
+    // Macro detail: the woven glass-fibre texture that shows through solder mask.
+    this.pcbMat.onBeforeCompile = (sh) => {
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
+        .replace('#include <project_vertex>', '#include <project_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nfloat pcbH(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }')
+        .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+          {
+            float fade = smoothstep(45.0, 4.0, length(vWPos - cameraPosition));
+            vec2 q = vWPos.xz * 2.4;
+            vec2 c = floor(q); vec2 f = fract(q) - 0.5;
+            float over = mod(c.x + c.y, 2.0);
+            vec3 pert = over > 0.5 ? vec3(-sin(f.x * 3.14159), 0.0, 0.0) : vec3(0.0, 0.0, -sin(f.y * 3.14159));
+            pert += (vec3(pcbH(floor(vWPos.xz * 18.0)), 0.0, pcbH(floor(vWPos.xz * 18.0) + 3.1)) - 0.5) * 0.35;
+            normal = normalize(normal + mat3(viewMatrix) * pert * 0.11 * fade);
+          }`)
+        .replace('#include <map_fragment>', `#include <map_fragment>
+          { float fade = smoothstep(45.0, 4.0, length(vWPos - cameraPosition));
+            vec2 q = vWPos.xz * 2.4; vec2 f = fract(q) - 0.5; float over = mod(floor(q.x) + floor(q.y), 2.0);
+            float w = over > 0.5 ? cos(f.x * 3.14159) : cos(f.y * 3.14159);
+            diffuseColor.rgb *= mix(1.0, 0.8 + 0.4 * w, fade * 0.6); }`);
+    };
     const edgeMat = new THREE.MeshStandardMaterial({ color: 0x1b2a1c, roughness: 0.8 });
     const pcb = new THREE.Mesh(new THREE.BoxGeometry(HOUSING.pcbX * 2, 1.6, HOUSING.pcbZ * 2), [edgeMat, edgeMat, this.pcbMat, edgeMat, edgeMat, edgeMat]);
     pcb.position.y = -0.8;
@@ -408,7 +434,7 @@ export class BoardWorld {
       m.position.set(q.x, q.h / 2, q.z); addShadow(m);
     }
     // Aluminium electrolytic caps (tall cylinders — great foreground occluders).
-    const can = new THREE.MeshStandardMaterial({ color: 0xa9adb3, metalness: 0.9, roughness: 0.35, envMap: env });
+    const can = new THREE.MeshStandardMaterial({ color: 0x8a8e94, metalness: 0.9, roughness: 0.55, envMap: env, envMapIntensity: 0.7 });
     const sleeve = new THREE.MeshStandardMaterial({ color: 0x151a24, roughness: 0.45, envMap: env, envMapIntensity: 0.8 });
     for (const q of L.ecaps) {
       const body = new THREE.Mesh(new THREE.CylinderGeometry(q.rad, q.rad, q.h, 40), sleeve);
@@ -481,7 +507,7 @@ export class BoardWorld {
     this.pkg.add(balls);
 
     // C4 bump layer (between die and substrate).
-    const bumpG = new THREE.SphereGeometry(0.075, 8, 6);
+    const bumpG = new THREE.SphereGeometry(0.075, 7, 5);
     const nx = 80, nz = 70;
     this.bumps = new THREE.InstancedMesh(bumpG, solder, nx * nz);
     bi = 0;
@@ -496,7 +522,7 @@ export class BoardWorld {
     this.dieGroup = new THREE.Group();
     const [dw, dh, dd] = P.die;
     const siliconSide = new THREE.MeshPhysicalMaterial({ color: 0x3a3c44, metalness: 0.6, roughness: 0.18, envMap: env, envMapIntensity: 1.2 });
-    const back = new THREE.MeshPhysicalMaterial({ color: 0x55586a, metalness: 0.85, roughness: 0.08, envMap: env, envMapIntensity: 1.4, iridescence: 0.25, iridescenceIOR: 1.5, iridescenceThicknessRange: [300, 500] });
+    const back = new THREE.MeshPhysicalMaterial({ color: 0x2c2e3a, metalness: 0.9, roughness: 0.1, envMap: env, envMapIntensity: 1.1, iridescence: 0.25, iridescenceIOR: 1.5, iridescenceThicknessRange: [300, 500] });
     const dieBody = new THREE.Mesh(new THREE.BoxGeometry(dw, dh, dd), [siliconSide, siliconSide, back, siliconSide, siliconSide, siliconSide]);
     dieBody.castShadow = true;
     this.dieGroup.add(dieBody);
@@ -525,8 +551,8 @@ export class BoardWorld {
     // Lid (IHS): nickel-plated copper with laser marking.
     const lidTex = this.lidTextures();
     this.lidMat = new THREE.MeshPhysicalMaterial({
-      color: 0xd9dbde, map: lidTex.color, roughnessMap: lidTex.rough, roughness: 1, metalness: 1,
-      envMap: env, envMapIntensity: 1.25, anisotropy: 0.55, clearcoat: 0.0,
+      color: 0xd9dbde, map: lidTex.color, roughnessMap: lidTex.rough, roughness: 1.15, metalness: 1,
+      envMap: env, envMapIntensity: 1.25,
     });
     this.lidSideMat = new THREE.MeshPhysicalMaterial({ color: 0xc9cbce, metalness: 1, roughness: 0.3, envMap: env, envMapIntensity: 1.1 });
     this.lid = new THREE.Group();
@@ -554,11 +580,11 @@ export class BoardWorld {
     const draw = (g, w, h, mode) => {
       const base = mode === 'color' ? '#ffffff' : '#474747';
       g.fillStyle = base; g.fillRect(0, 0, w, h);
-      // fine brushed grain
-      for (let i = 0; i < 2600; i++) {
-        const y = Math.random() * h;
-        g.fillStyle = mode === 'color' ? `rgba(0,0,0,${Math.random() * 0.03})` : `rgba(255,255,255,${Math.random() * 0.05})`;
-        g.fillRect(0, y, w, Math.random() * 1.5 + 0.3);
+      // fine brushed grain (short, faint strokes along x)
+      for (let i = 0; i < 9000; i++) {
+        const y = Math.random() * h, x = Math.random() * w;
+        g.fillStyle = mode === 'color' ? `rgba(0,0,0,${Math.random() * 0.02})` : `rgba(255,255,255,${Math.random() * 0.035})`;
+        g.fillRect(x - 200, y, 200 + Math.random() * 400, 0.6);
       }
       const mark = mode === 'color' ? 'rgba(70,72,78,0.75)' : '#b0b0b0';
       g.fillStyle = mark; g.textAlign = 'center'; g.textBaseline = 'middle';
@@ -703,7 +729,7 @@ export class BoardWorld {
     this.sweep.intensity = baking ? 0 : 2200 * Math.sin(Math.PI * clamp((t - 14.2) / 4.2)) ** 2;
     this.sweep.position.set(lerp(-90, 90, sweepK), 120, lerp(60, -40, sweepK));
     this.sweep.target.position.set(lerp(-10, 10, sweepK), 0, 0);
-    const er = -0.6 + 1.2 * smooth((t - 13.6) / 5.5) + (t > 30 ? 0 : 0);
+    const er = -1.1 + 2.0 * smooth((t - 13.8) / 5.0);
     for (const m of [this.lidMat, this.lidSideMat]) m.envMapRotation.set(0, er, 0);
 
     // Traces.

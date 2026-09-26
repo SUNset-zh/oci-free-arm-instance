@@ -38,8 +38,10 @@ function buildScore(ctx, out, cues, from) {
   const master = keep(ctx.createGain());
   master.gain.value = 0.9;
   const comp = keep(ctx.createDynamicsCompressor());
-  comp.threshold.value = -16; comp.ratio.value = 3; comp.attack.value = 0.01; comp.release.value = 0.25;
-  master.connect(comp); comp.connect(out);
+  comp.threshold.value = -18; comp.ratio.value = 4; comp.attack.value = 0.004; comp.release.value = 0.3;
+  const lim = keep(ctx.createDynamicsCompressor());
+  lim.threshold.value = -3; lim.ratio.value = 20; lim.attack.value = 0.001; lim.release.value = 0.1; lim.knee.value = 0;
+  master.connect(comp); comp.connect(lim); lim.connect(out);
   const verb = keep(ctx.createConvolver());
   verb.buffer = makeIR(ctx, 4.5, 2.4);
   const verbIn = keep(ctx.createGain()); verbIn.gain.value = 1;
@@ -63,10 +65,6 @@ function buildScore(ctx, out, cues, from) {
     for (const [ft, v] of pts) if (ft > from) param.linearRampToValueAtTime(v, at(ft));
   };
   const alive = (t0, t1) => t1 > from && t0 < end;
-  const startAt = (src, ft) => {
-    const off = Math.max(0, from - ft);
-    if (src.start.length !== undefined) src.start(at(Math.max(ft, from)), src.buffer ? off % (src.buffer.duration || 1) : undefined);
-  };
 
   // ---------------------------------------------------------------- drone bed
   const drone = (freqs, type, cutPts, gainPts, detune = 6, wet = 0.5) => {
@@ -209,7 +207,7 @@ function buildScore(ctx, out, cues, from) {
     }
     cues.bands.forEach((ft) => { tick(ft, 900, 0.09); tick(ft + 0.015, 3600, 0.05); });
   }
-  hit(z1, 1.3, 5.5); // landing on the road
+  hit(z1, 0.95, 5.5); // landing on the road
   whoosh(cues.laneChange[0], cues.laneChange[1], 0.5, 300, 1400);
   return { nodes, master };
 }

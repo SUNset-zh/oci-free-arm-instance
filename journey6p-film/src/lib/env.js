@@ -40,6 +40,9 @@ export function makeEnvironments(renderer) {
     panel(s, 4, 40, 0xdfe8ff, 1.6, [38, 6, -14], [0, 0, 0]);
     panel(s, 30, 3, 0xffd6a8, 1.1, [0, 4, 40], [0, 0, 0]);
     panel(s, 60, 2, 0xffffff, 0.8, [0, -6, -40], [0, 0, 0]);
+    // Low wide softboxes: they sweep across flat metal (the SoC lid) as the env rotates.
+    panel(s, 26, 7, 0xffffff, 1.5, [40, 9, 0], [0, 0, 0]);
+    panel(s, 18, 5, 0xe6eeff, 1.0, [-10, 7, -40], [0, 0, 0]);
     out.studio = pmrem.fromScene(s, 0.02).texture;
   }
 

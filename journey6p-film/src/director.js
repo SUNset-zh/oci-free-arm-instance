@@ -135,9 +135,9 @@ export class Director {
       { t: 12.25, p: [86, 1.55, -3.0], l: [40, 0.7, 0], ap: 0.035 },
       { t: 13.25, p: [58, 1.25, 0.2], l: [15, 1.8, 0], fov: 42 },
       { t: 14.05, p: [37, 3.3, 0], l: [0, 3.2, 0] },
-      { t: 14.95, p: [33, 11, 4.5], l: [0, 3.4, 0], fov: 38, ap: 0.03 },
-      { t: 16.2, p: [38, 24, 29], l: [-6, 2.2, -5] },
-      { t: 17.6, p: [22, 35, 48], l: [-9, 1.8, -6], fov: 36 },
+      { t: 14.95, p: [34, 9.5, 6], l: [0, 3.4, 1.5], fov: 38, ap: 0.03 },
+      { t: 16.2, p: [50, 21, 56], l: [-14, 2.2, 13], fov: 34 },
+      { t: 17.6, p: [32, 28, 66], l: [-17, 2, 8.4], fov: 33 },
       { t: 18.6, p: [8, 58, 88], l: [0, 6, 0], ap: 0.018 },
       { t: 20.0, p: [-34, 44, 78], l: [0, 8.5, 0] },
       { t: 21.2, p: [-40, 46, 60], l: [0, 11, 0] },
@@ -165,24 +165,33 @@ export class Director {
 
     // H. Descent through the copper stack (nano frame, nm) — log-spaced keys.
     const nk = [dieCam.keyAt(29.5, 'nano'), dieCam.keyAt(29.9, 'nano')];
-    const hs = [17000, 8600, 4300, 2300, 1250, 700, 420, 262];
-    const ts = [30.5, 31.1, 31.7, 32.3, 32.85, 33.35, 33.8, 34.25];
-    ts.forEach((t, i) => {
-      const y = hs[i];
-      const ang = -0.09 * (i + 1);
-      const up = [Math.sin(ang), 0, -Math.cos(ang)];
-      const off = i === 0 ? 250 : 0;
-      nk.push({ t, p: [0, y, off], l: [0, FIN.top, 0], up, fov: 44, ap: i < 3 ? 0.012 : 0.02 });
-    });
+    // Descent: the camera sinks down the open shaft while pitching from straight
+    // down to a raking 55° and circling, so the copper layers read as stacked
+    // "overpasses". Keys are log-spaced in height.
+    const N = 11;
+    for (let i = 1; i <= N; i++) {
+      const u = i / N;
+      const t = lerp(29.9, 34.25, u);
+      const y = 42800 * Math.pow(300 / 42800, Math.pow(u, 0.85));
+      const pitch = THREE.MathUtils.degToRad(lerp(88, 56, smooth(u * 1.4)));
+      const yaw = -1.2 + 1.5 * u;
+      const f = (y - FIN.top) / Math.sin(pitch);
+      const dir = [Math.cos(yaw) * Math.cos(pitch), -Math.sin(pitch), Math.sin(yaw) * Math.cos(pitch)];
+      const off = (1 - smooth(u * 3)) * 900;
+      const p = [0, y, off];
+      const l = [p[0] + dir[0] * f, p[1] + dir[1] * f, p[2] + dir[2] * f];
+      const up = u < 0.25 ? [Math.cos(yaw) * 0.7, 0.7, Math.sin(yaw) * 0.7] : [0, 1, 0];
+      nk.push({ t, p, l, up, fov: 46, ap: i < 3 ? 0.012 : 0.022, f });
+    }
     nk.push(
-      // I. Logic sea under M1.
-      { t: 35.1, p: [-6, 128, 26], l: [-150, 68, -70], up: [0, 1, 0], fov: 46, ap: 0.03 },
-      { t: 36.1, p: [-34, 122, 72], l: [-27, 60, 0], ap: 0.035 },
+      // I. Cutaway: the metal dissolves, we rise over the field of FinFETs.
+      { t: 34.95, p: [70, 330, 250], l: [-20, 60, 0], up: [0, 1, 0], fov: 44, ap: 0.02 },
+      { t: 35.9, p: [150, 270, 310], l: [-30, 55, 0], ap: 0.025 },
       // J. The transistor.
-      { t: 37.0, p: [38, 118, 96], l: [-27, 55, 0], fov: 40 },
-      { t: 38.2, p: [16, 110, 92], l: [-28, 52, 0], ap: 0.04 },
-      { t: 39.3, p: [-16, 104, 84], l: [-32, 50, 0] },
-      { t: 40.3, p: [-55, 70, 17], l: [-20, 58, 0], fov: 50 },
+      { t: 36.9, p: [30, 165, 200], l: [-27, 55, 0], fov: 40 },
+      { t: 38.1, p: [-14, 122, 128], l: [-27, 56, 0], ap: 0.035 },
+      { t: 39.3, p: [-9, 98, 72], l: [-34, 58, 0], fov: 44 },
+      { t: 40.3, p: [-55, 72, 20], l: [-20, 58, 0], fov: 50 },
       // K. Electron POV through the channel.
       { t: 41.0, p: [-57, ch.y / 10 + FIN.top, ch.z / 10 + 1.2], l: [-5, ch.y / 10 + FIN.top, ch.z / 10], fov: 58, ap: 0.03 },
       { t: 42.2, p: [-31, ch.y / 10 + FIN.top, ch.z / 10 + 0.3], l: [20, ch.y / 10 + FIN.top, ch.z / 10] },
@@ -277,7 +286,7 @@ export class Director {
       streamAlpha: keys(t, [[0, 1], [9.2, 1], [9.6, 0], [56.6, 0], [57.2, 0.9], [59.0, 0.9], [60.2, 0]]),
       ribbon: keys(t, [[0, 0], [59.0, 0], [59.5, 1], [61.9, 1], [62.8, 0]]),
       bloom: 0.9,
-      bloomThreshold: 1.0,
+      bloomThreshold: keys(t, [[0, 1.0], [9.4, 1.0], [9.6, 1.4], [23.8, 1.4], [24.2, 1.0]]),
       bloomKnee: 0.6,
       zoomBlur: Math.max(
         keys(t, [[0, 0], [10.2, 0], [10.36, 0.28, 'in2'], [10.7, 0, 'out2']]),
@@ -295,13 +304,14 @@ export class Director {
       dieGlow: 1,
       wave: 1,
       wireFlow: 1,
-      sea: keys(t, [[0, 0], [33.9, 0], [34.7, 1], [58, 1]]),
+      sea: keys(t, [[0, 0], [34.2, 0], [35.0, 1], [58, 1]]),
       iso: keys(t, [[0, 0], [36.6, 0], [37.3, 1], [44.2, 1], [44.8, 0]]),
       electrons: keys(t, [[0, 0], [37.1, 0], [37.8, 1], [44.4, 1], [44.9, 0], [53.4, 0]]),
       channel: 1,
       latElectrons: keys(t, [[0, 0], [43.4, 0], [43.9, 1], [47.6, 1], [48.6, 0]]),
       atomCloud: keys(t, [[0, 0], [48.2, 0], [49.3, 1, 'inOut2'], [52.3, 1], [53.1, 0]]),
       latAlpha: 1,
+      metal: keys(t, [[0, 1], [34.0, 1], [34.9, 0, 'inOut2'], [53.3, 0], [53.9, 1]]),
       consoleLight: keys(t, [[0, 0], [6.4, 0], [7.8, 1], [9.6, 1], [9.8, 0], [56.5, 0], [57.0, 0.7], [58.6, 0]]),
       scaleAlpha: keys(t, [[0, 0], [4.7, 0], [5.6, 1], [62.2, 1], [63.2, 0]]),
     };
